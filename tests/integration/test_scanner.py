@@ -1,5 +1,9 @@
 import os
+import sys
 
+import pytest
+
+import tifjpg.fs.scanner as scanner_module
 from tifjpg.domain.folder_rules import classify
 from tifjpg.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT
 from tifjpg.domain.naming import XrayNaming
@@ -69,7 +73,28 @@ def test_files_are_sorted_naturally(tmp_path):
     assert snapshot.tiffs() == ("снимок 1.tif", "снимок 2.tif", "снимок 10.tif")
 
 
-def test_unreadable_folder_is_reported_not_raised(tmp_path):
+def test_unreadable_archive_is_reported_not_raised(tmp_path, monkeypatch):
+    """Обрыв сети или отказ в доступе не должен прекращать обход дерева."""
+    root = build_tree(str(tmp_path))
+    real_scandir = os.scandir
+
+    def failing_scandir(path):
+        if naming.is_archive_dir(os.path.basename(str(path))):
+            raise OSError(5, "доступ запрещён", str(path))
+        return real_scandir(path)
+
+    monkeypatch.setattr(scanner_module.os, "scandir", failing_scandir)
+    errors = []
+    snapshots = scan_tree(root, naming, on_error=lambda path, exc: errors.append((path, exc)))
+
+    assert len(errors) == 2  # две папки архива в дереве
+    by_path = {os.path.relpath(snapshot.path, root): snapshot for snapshot in snapshots}
+    assert by_path["Объект 001"].tiffs()  # остальные папки прочитаны
+    assert by_path["Объект 002"].archive_files == ()
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="права доступа проверяются только на POSIX")
+def test_unreadable_folder_permissions_are_reported(tmp_path):
     root = build_tree(str(tmp_path))
     locked = os.path.join(root, "Объект 007")
     os.makedirs(locked)
@@ -79,5 +104,5 @@ def test_unreadable_folder_is_reported_not_raised(tmp_path):
         snapshots = scan_tree(root, naming, on_error=lambda path, exc: errors.append((path, exc)))
     finally:
         os.chmod(locked, 0o755)
-    assert snapshots  # обход продолжился
+    assert snapshots
     assert errors or os.geteuid() == 0
