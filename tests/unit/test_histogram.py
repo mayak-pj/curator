@@ -1,4 +1,4 @@
-from xray2jpeg.imaging.histogram import downsample, histogram_stats, percentile_value
+from tifjpg.imaging.histogram import downsample, histogram_stats, percentile_value
 
 
 def test_stats_of_small_histogram():

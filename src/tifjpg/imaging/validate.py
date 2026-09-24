@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from typing import Optional
 
-from xray2jpeg.domain.errors import FileProcessingError
-from xray2jpeg.imaging.jpeg_info import JpegHeaderError, read_jpeg_header
-from xray2jpeg.imaging.vips_runtime import at_least, load_pyvips
+from tifjpg.domain.errors import FileProcessingError
+from tifjpg.imaging.jpeg_info import JpegHeaderError, read_jpeg_header
+from tifjpg.imaging.vips_runtime import at_least, load_pyvips
 
 
 @dataclass(frozen=True)

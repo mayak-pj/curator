@@ -9,7 +9,7 @@ import struct
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
-from xray2jpeg.domain.errors import FileProcessingError
+from tifjpg.domain.errors import FileProcessingError
 
 TAG_NAMES = {
     254: "NewSubfileType", 256: "ImageWidth", 257: "ImageLength", 258: "BitsPerSample",

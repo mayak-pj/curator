@@ -5,11 +5,11 @@
 """
 
 
-class Xray2JpegError(Exception):
+class TifJpgError(Exception):
     """Базовый класс всех ожидаемых ошибок приложения."""
 
 
-class FatalError(Xray2JpegError):
+class FatalError(TifJpgError):
     """Обработка невозможна в принципе (например, не загрузился libvips)."""
 
 
@@ -17,7 +17,7 @@ class VipsUnavailableError(FatalError):
     pass
 
 
-class FileProcessingError(Xray2JpegError):
+class FileProcessingError(TifJpgError):
     """Ошибка обработки конкретного файла. Ведёт к откату папки."""
 
     def __init__(self, path, reason):
@@ -30,7 +30,7 @@ class UnsupportedImageError(FileProcessingError):
     """Файл читается, но его параметры не поддерживаются конвертером."""
 
 
-class ConversionCancelled(Xray2JpegError):
+class ConversionCancelled(TifJpgError):
     """Конвертация остановлена пользователем."""
 
     def __init__(self, path):

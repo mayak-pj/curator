@@ -3,7 +3,7 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xray2jpeg"
+name = "tifjpg"
 version = "0.1.0"
 description = "Portable TIFF -> JPEG converter for radiographs (Windows 7)"
 requires-python = ">=3.8"

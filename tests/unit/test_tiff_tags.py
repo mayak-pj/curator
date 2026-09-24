@@ -1,7 +1,7 @@
 import pytest
 
 from tests.tiff_writer import ASCII, RATIONAL, SHORT, write_tiff
-from xray2jpeg.imaging.tiff_tags import TiffHeaderError, read_tiff_header
+from tifjpg.imaging.tiff_tags import TiffHeaderError, read_tiff_header
 
 
 @pytest.mark.parametrize("byte_order", ["<", ">"])

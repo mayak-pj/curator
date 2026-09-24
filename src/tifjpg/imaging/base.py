@@ -9,8 +9,8 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Callable, Dict, Optional, Tuple
 
-from xray2jpeg.domain.errors import UnsupportedImageError
-from xray2jpeg.imaging.tone import DEFAULT_TONE, ToneSpec
+from tifjpg.domain.errors import UnsupportedImageError
+from tifjpg.imaging.tone import DEFAULT_TONE, ToneSpec
 
 # progress(stage, fraction 0..1); вызывается из потока обработки.
 ProgressCallback = Callable[[str, float], None]

@@ -1,6 +1,6 @@
 """Обработка изображений. pyvips импортируется лениво — при первой конвертации."""
 
-from xray2jpeg.imaging.base import (
+from tifjpg.imaging.base import (
     ConversionOptions,
     ConversionResult,
     ImageConverter,
@@ -8,10 +8,10 @@ from xray2jpeg.imaging.base import (
     register_converter,
     supported_extensions,
 )
-from xray2jpeg.imaging.tone import DEFAULT_TONE, ToneSpec
-from xray2jpeg.imaging.tone import METHODS as TONE_METHODS
-from xray2jpeg.imaging.validate import JpegCheck, validate_jpeg
-from xray2jpeg.imaging.vips_converter import VipsTiffJpegConverter
+from tifjpg.imaging.tone import DEFAULT_TONE, ToneSpec
+from tifjpg.imaging.tone import METHODS as TONE_METHODS
+from tifjpg.imaging.validate import JpegCheck, validate_jpeg
+from tifjpg.imaging.vips_converter import VipsTiffJpegConverter
 
 register_converter(VipsTiffJpegConverter.extensions, VipsTiffJpegConverter)
 

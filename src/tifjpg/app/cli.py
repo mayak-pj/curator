@@ -1,18 +1,18 @@
 """Консольный интерфейс для проверки ядра без GUI.
 
-    python -m xray2jpeg convert SRC.tif DST.jpeg                  # linear, Q100 (решение D12)
-    python -m xray2jpeg convert SRC.tif DST.jpeg --tone percentile --p-low 0.5 --p-high 99.5
+    python -m tifjpg convert SRC.tif DST.jpeg                  # linear, Q100 (решение D12)
+    python -m tifjpg convert SRC.tif DST.jpeg --tone percentile --p-low 0.5 --p-high 99.5
 """
 
 import argparse
 import json
 import sys
 
-from xray2jpeg.domain.errors import Xray2JpegError
+from tifjpg.domain.errors import TifJpgError
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="xray2jpeg")
+    parser = argparse.ArgumentParser(prog="tifjpg")
     commands = parser.add_subparsers(dest="command")
     commands.required = True
 
@@ -31,7 +31,7 @@ def build_parser():
 
 
 def cmd_convert(args):
-    from xray2jpeg.imaging import ConversionOptions, ToneSpec, converter_for, validate_jpeg
+    from tifjpg.imaging import ConversionOptions, ToneSpec, converter_for, validate_jpeg
 
     options = ConversionOptions(
         tone=ToneSpec(args.tone, p_low=args.p_low, p_high=args.p_high, exclude_extremes=args.exclude_extremes),
@@ -58,6 +58,6 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         return args.handler(args)
-    except (Xray2JpegError, ValueError, OSError) as exc:
+    except (TifJpgError, ValueError, OSError) as exc:
         sys.stderr.write("\nОшибка: {}\n".format(exc))
         return 2

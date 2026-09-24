@@ -10,11 +10,11 @@ import os
 import time
 from array import array
 
-from xray2jpeg.domain.errors import ConversionCancelled, FileProcessingError, UnsupportedImageError
-from xray2jpeg.imaging.base import ConversionResult, ImageConverter
-from xray2jpeg.imaging.tiff_tags import read_tiff_header
-from xray2jpeg.imaging.tone import build_lut, window_from_histogram
-from xray2jpeg.imaging.vips_runtime import DEFAULT_CONCURRENCY, at_least, load_pyvips
+from tifjpg.domain.errors import ConversionCancelled, FileProcessingError, UnsupportedImageError
+from tifjpg.imaging.base import ConversionResult, ImageConverter
+from tifjpg.imaging.tiff_tags import read_tiff_header
+from tifjpg.imaging.tone import build_lut, window_from_histogram
+from tifjpg.imaging.vips_runtime import DEFAULT_CONCURRENCY, at_least, load_pyvips
 
 JPEG_MAX_DIMENSION = 65500
 STAGE_HISTOGRAM = "histogram"

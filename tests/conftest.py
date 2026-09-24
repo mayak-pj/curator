@@ -5,7 +5,7 @@ import pytest
 
 @pytest.fixture(scope="session")
 def vips():
-    from xray2jpeg.imaging.vips_runtime import load_pyvips
+    from tifjpg.imaging.vips_runtime import load_pyvips
 
     return load_pyvips()
 

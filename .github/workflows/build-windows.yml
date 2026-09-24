@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-2022
     env:
       PYTHONUTF8: "1"
-      XRAY2JPEG_VIPS_DIR: ${{ github.workspace }}\build\vips
+      TIFJPG_VIPS_DIR: ${{ github.workspace }}\build\vips
     steps:
       - uses: actions/checkout@v4
 
@@ -38,27 +38,27 @@ jobs:
         run: python -m PyInstaller packaging/smoke.spec --noconfirm --distpath dist --workpath build/pyinstaller
 
       - name: Check bundle imports for Windows 7
-        run: python scripts/check_pe_imports.py dist/Xray2JpegSmoke --report dist/Xray2JpegSmoke/pe_imports_report.txt
+        run: python scripts/check_pe_imports.py dist/tifjpg_smoke --report dist/tifjpg_smoke/pe_imports_report.txt
 
       - name: Run smoke checks headless
         shell: pwsh
         env:
           # Собранный exe обязан брать DLL из своей сборки, а не из build/vips.
-          XRAY2JPEG_VIPS_DIR: ""
+          TIFJPG_VIPS_DIR: ""
         run: |
-          if (Test-Path dist\Xray2JpegSmoke\_internal\ucrtbase.dll) { throw "ucrtbase.dll попал в сборку" }
-          if (-not (Test-Path dist\Xray2JpegSmoke\_internal\libvips-42.dll)) { throw "libvips-42.dll нет в сборке" }
-          Write-Host ("DLL в _internal: " + (Get-ChildItem dist\Xray2JpegSmoke\_internal\*.dll).Count)
-          $process = Start-Process -FilePath dist\Xray2JpegSmoke\Xray2JpegSmoke.exe -ArgumentList "--no-gui" -Wait -PassThru
-          Get-Content -Encoding UTF8 dist\Xray2JpegSmoke\smoke_report.txt
-          Remove-Item dist\Xray2JpegSmoke\smoke_report.txt
+          if (Test-Path dist\tifjpg_smoke\_internal\ucrtbase.dll) { throw "ucrtbase.dll попал в сборку" }
+          if (-not (Test-Path dist\tifjpg_smoke\_internal\libvips-42.dll)) { throw "libvips-42.dll нет в сборке" }
+          Write-Host ("DLL в _internal: " + (Get-ChildItem dist\tifjpg_smoke\_internal\*.dll).Count)
+          $process = Start-Process -FilePath dist\tifjpg_smoke\tifjpg_smoke.exe -ArgumentList "--no-gui" -Wait -PassThru
+          Get-Content -Encoding UTF8 dist\tifjpg_smoke\smoke_report.txt
+          Remove-Item dist\tifjpg_smoke\smoke_report.txt
           exit $process.ExitCode
 
       - name: Package
         shell: pwsh
-        run: Compress-Archive -Path dist\Xray2JpegSmoke -DestinationPath Xray2JpegSmoke-win7-x64.zip
+        run: Compress-Archive -Path dist\tifjpg_smoke -DestinationPath tifjpg_smoke-win7-x64.zip
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Xray2JpegSmoke-win7-x64
-          path: Xray2JpegSmoke-win7-x64.zip
+          name: tifjpg_smoke-win7-x64
+          path: tifjpg_smoke-win7-x64.zip

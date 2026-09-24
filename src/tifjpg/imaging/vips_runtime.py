@@ -9,7 +9,7 @@ import os
 import sys
 import threading
 
-from xray2jpeg.domain.errors import VipsUnavailableError
+from tifjpg.domain.errors import VipsUnavailableError
 
 DEFAULT_CONCURRENCY = 2
 
@@ -21,13 +21,13 @@ def bundled_vips_dir():
     """Каталог с DLL libvips.
 
     Собранное приложение использует только DLL из своей папки _internal;
-    переменная XRAY2JPEG_VIPS_DIR учитывается лишь при запуске из исходников
+    переменная TIFJPG_VIPS_DIR учитывается лишь при запуске из исходников
     (тесты на Windows).
     """
     base = getattr(sys, "_MEIPASS", None)
     if base:
         return base
-    override = os.environ.get("XRAY2JPEG_VIPS_DIR")
+    override = os.environ.get("TIFJPG_VIPS_DIR")
     if override:
         return override if os.path.isdir(override) else None
     return None

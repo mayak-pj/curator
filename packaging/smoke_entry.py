@@ -1,9 +1,9 @@
 """Этап 2: проверка стека на Windows 7 (spike).
 
-    Xray2JpegSmoke.exe           окно с результатами проверок и кнопкой «Конвертировать свой TIFF…»
-    Xray2JpegSmoke.exe --no-gui  только автоматические проверки; отчёт в файл, код возврата 1 при ошибке
+    tifjpg_smoke.exe           окно с результатами проверок и кнопкой «Конвертировать свой TIFF…»
+    tifjpg_smoke.exe --no-gui  только автоматические проверки; отчёт в файл, код возврата 1 при ошибке
 
-Пишет только в %LOCALAPPDATA%\\Xray2Jpeg-smoke и (если можно) smoke_report.txt рядом с exe.
+Пишет только в %LOCALAPPDATA%\\tifjpg-smoke и (если можно) smoke_report.txt рядом с exe.
 Выбранный пользователем TIFF только читается.
 """
 
@@ -18,11 +18,11 @@ import threading
 import time
 import traceback
 
-from xray2jpeg import __version__
-from xray2jpeg.imaging import ConversionOptions, VipsTiffJpegConverter, validate_jpeg
-from xray2jpeg.imaging.vips_runtime import bundled_vips_dir, load_pyvips, vips_version
+from tifjpg import __version__
+from tifjpg.imaging import ConversionOptions, VipsTiffJpegConverter, validate_jpeg
+from tifjpg.imaging.vips_runtime import bundled_vips_dir, load_pyvips, vips_version
 
-WORK_DIR_NAME = "Xray2Jpeg-smoke"
+WORK_DIR_NAME = "tifjpg-smoke"
 CYRILLIC_PARTS = ("Тест", "Объект №1")
 REPORT_NAME = "smoke_report.txt"
 
@@ -38,7 +38,7 @@ class Report:
         self.lines.append("[{:<4}] {}{}".format(status, name, ": " + detail if detail else ""))
 
     def text(self):
-        header = "Xray2Jpeg smoke {} — {}".format(__version__, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        header = "TifJpg smoke {} — {}".format(__version__, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         summary = "ИТОГ: {}".format("ошибок нет" if not self.failures else "ошибок: {}".format(self.failures))
         return "\n".join([header, ""] + self.lines + ["", summary])
 
@@ -244,7 +244,7 @@ class SmokeWindow:
         self.busy = False
 
         self.root = tk.Tk()
-        self.root.title("Xray2Jpeg — проверка на Windows 7")
+        self.root.title("TifJpg — проверка на Windows 7")
         self.root.geometry("900x620")
 
         frame = ttk.Frame(self.root, padding=10)
@@ -343,7 +343,7 @@ class SmokeWindow:
 
 def show_fatal(message):
     if sys.platform == "win32":
-        ctypes.windll.user32.MessageBoxW(None, message, "Xray2Jpeg smoke", 0x10)
+        ctypes.windll.user32.MessageBoxW(None, message, "TifJpg smoke", 0x10)
     elif sys.stderr:
         sys.stderr.write(message + "\n")
 
