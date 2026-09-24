@@ -576,7 +576,7 @@ tj/
 |---|---|---|
 | 1 | `tiff_inspect`, сравнение тон-маппинга → выбор; `imaging/` + CLI одного файла + тесты | пользователь выбирает метод; проверка на реальных TIFF |
 | 2 | Win7 spike: минимальный exe (pyvips + tkinter + кириллический путь) из GitHub Actions | запуск на целевом ПК |
-| 3 | scanner, naming, ordering, folder_rules, planner (CLI dry-run) | |
+| 3 | scanner, naming, ordering, folder_rules, planner; сухой прогон `python -m tifjpg scan ROOT` | **выполнено** 2026-09-24: 41 новый тест, дерево-образец проверено |
 | 4 | journal, safe_copy + retry, фазы A/B, `ИСХ` | тесты с инъекцией сбоев |
 | 5 | rollback, recovery, блокировки | |
 | 6 | ProcessingService, события, логирование, конфиг | |
