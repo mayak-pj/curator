@@ -12,6 +12,7 @@ import json
 import os
 import sys
 
+from tifjpg.domain import folder_rules
 from tifjpg.domain.errors import TifJpgError
 
 
@@ -36,6 +37,8 @@ def build_parser():
     scan.add_argument("root")
     scan.add_argument("--full", action="store_true", help="показывать все файлы, а не первые три")
     scan.add_argument("--empty", action="store_true", help="показывать и папки без снимков")
+    scan.add_argument("--rules", default=folder_rules.DEFAULT_NAME,
+                      choices=folder_rules.available(), help="набор правил классификации папок")
     scan.add_argument("--json", help="сохранить отчёт в JSON")
     scan.set_defaults(handler=cmd_scan)
     return parser
@@ -61,114 +64,21 @@ def cmd_convert(args):
 
 
 def cmd_scan(args):
-    from tifjpg.domain import folder_rules
-    from tifjpg.domain.models import CONFLICT, DONE, EMPTY
-    from tifjpg.domain.naming import XrayNaming
-    from tifjpg.fs.scanner import scan_tree
-    from tifjpg.transaction.planner import plan_folder
+    from tifjpg.app.scan import as_dict, render_report, scan_root
+    from tifjpg.domain.models import CONFLICT
 
-    naming = XrayNaming()
-    errors = []
-    snapshots = scan_tree(args.root, naming, on_error=lambda path, exc: errors.append((path, exc)))
-
-    plans = []
-    for snapshot in snapshots:
-        decision = folder_rules.classify(snapshot, naming)
-        if decision.kind == EMPTY and not args.empty:
-            continue
-        plans.append(plan_folder(snapshot, decision, naming))
-
-    to_process = [plan for plan in plans if plan.ok]
-    blocked = [plan for plan in plans if plan.decision.processable and plan.problems]
-    done = [plan for plan in plans if plan.decision.kind == DONE]
-    conflicts = [plan for plan in plans if plan.decision.kind == CONFLICT]
-
-    print("Корень: {}".format(os.path.abspath(args.root)))
-    print("Папок просмотрено: {}".format(len(snapshots)))
-    print()
-    _print_group("К ОБРАБОТКЕ", to_process, args, show_files=True)
-    _print_group("НЕ ОБРАБАТЫВАЛИСЬ (уже готовы)", done, args)
-    _print_group("КОНФЛИКТЫ (папка не тронута)", conflicts, args)
-    _print_group("ОБРАБОТКА НЕВОЗМОЖНА", blocked, args, show_problems=True)
-
-    if errors:
-        print("Не удалось прочитать ({}):".format(len(errors)))
-        for path, exc in errors:
-            print("  {} — {}".format(path, exc))
-        print()
-
-    total_files = sum(len(plan.files) for plan in to_process)
-    print("ИТОГО: к обработке {} файлов в {} папках; готовых {}, конфликтов {}, невозможных {}".format(
-        total_files, len(to_process), len(done), len(conflicts), len(blocked)))
+    result = scan_root(args.root, rules=args.rules, include_empty=args.empty)
+    print(render_report(result, full=args.full))
 
     if args.json:
-        _write_json(args, snapshots, plans, errors)
+        directory = os.path.dirname(os.path.abspath(args.json))
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        with open(args.json, "w", encoding="utf-8") as stream:
+            json.dump(as_dict(result), stream, ensure_ascii=False, indent=1)
         print("JSON: {}".format(args.json))
-    return 1 if (conflicts or blocked or errors) else 0
 
-
-def _print_group(title, plans, args, show_files=False, show_problems=False):
-    if not plans:
-        return
-    print("{} ({}):".format(title, len(plans)))
-    for plan in plans:
-        print("  {}".format(_relative(plan.folder, args.root)))
-        print("      {} — {}".format(plan.decision.rule, plan.decision.reason))
-        if show_files:
-            shown = plan.files if args.full else plan.files[:3]
-            for planned in shown:
-                print("      {} -> {} + {}{}{}".format(
-                    os.path.basename(planned.source),
-                    os.path.basename(planned.jpeg),
-                    os.path.basename(plan.archive_dir), os.sep,
-                    os.path.basename(planned.archive)))
-            if len(plan.files) > len(shown):
-                print("      … ещё {} файл(ов)".format(len(plan.files) - len(shown)))
-            if plan.creates_archive_dir:
-                print("      будет создана папка {}".format(os.path.basename(plan.archive_dir)))
-            if plan.two_step_renames:
-                print("      переименование в архиве через временные имена")
-        if show_problems:
-            for problem in plan.problems:
-                print("      ! {}".format(problem))
-    print()
-
-
-def _relative(path, root):
-    try:
-        relative = os.path.relpath(path, root)
-    except ValueError:
-        return path
-    return "." if relative == "." else relative
-
-
-def _write_json(args, snapshots, plans, errors):
-    report = {
-        "root": os.path.abspath(args.root),
-        "folders_seen": len(snapshots),
-        "errors": [{"path": path, "error": str(exc)} for path, exc in errors],
-        "folders": [{
-            "path": plan.folder,
-            "decision": plan.decision.kind,
-            "rule": plan.decision.rule,
-            "reason": plan.decision.reason,
-            "archive_dir": plan.archive_dir,
-            "creates_archive_dir": plan.creates_archive_dir,
-            "two_step_renames": plan.two_step_renames,
-            "problems": list(plan.problems),
-            "files": [{
-                "index": planned.index,
-                "source": planned.source,
-                "jpeg": planned.jpeg,
-                "archive": planned.archive,
-            } for planned in plan.files],
-        } for plan in plans],
-    }
-    directory = os.path.dirname(os.path.abspath(args.json))
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-    with open(args.json, "w", encoding="utf-8") as stream:
-        json.dump(report, stream, ensure_ascii=False, indent=1)
+    return 1 if (result.by_kind(CONFLICT) or result.blocked or result.errors) else 0
 
 
 def _print_progress(stage, fraction):

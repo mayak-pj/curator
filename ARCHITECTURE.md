@@ -120,11 +120,25 @@ Portable-приложение для Windows 7 x64 (без прав админи
 
 ## 6. Правила классификации папок (`domain/folder_rules.py`)
 
-Вынесено в отдельный модуль с одной функцией-политикой:
+Правила будут меняться, поэтому они описаны **таблицей, а не кодом**. Каждое правило — строка:
 
+```python
+Rule(код, решение, условие(facts) -> bool, пояснение(facts) -> str)
 ```
-classify(snapshot: FolderSnapshot, naming: NamingScheme) -> FolderDecision
+
+`facts` (`FolderFacts`) содержит готовые числа: `tiffs_in_folder`, `tiffs_in_archive`, `total_tiffs`, `jpegs`, `archive_dir`. Срабатывает **первое подошедшее правило**, последнее обязано подходить всегда.
+
+Чтобы изменить политику:
+
+- поправить, добавить, убрать или переставить строку в `DEFAULT_RULES` — больше нигде ничего менять не нужно;
+- либо зарегистрировать свой набор и выбрать его по имени (в `config.json` → `"folder_rules"`, в консоли — `scan --rules`):
+
+```python
+folder_rules.register("my_v2", (Rule(...), ...))
 ```
+
+Классификатор получают через `folder_rules.get(имя)`; сканер, планировщик и GUI знают только о `FolderDecision` и от состава правил не зависят.
+
 
 `FolderSnapshot` — неизменяемый снимок содержимого папки: TIFF в корне, JPEG в корне, TIFF и JPEG в `ИСХ`. `FolderDecision` — одно из: `PROCESS_ROOT`, `PROCESS_FROM_ISH`, `DONE`, `CONFLICT(причина)`, `EMPTY`. Замена правил — новая функция с той же сигнатурой, выбираемая в `config.json` (`"folder_rules": "default_v1"`).
 

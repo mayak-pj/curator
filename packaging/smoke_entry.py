@@ -25,6 +25,7 @@ from tifjpg.imaging.vips_runtime import bundled_vips_dir, load_pyvips, vips_vers
 WORK_DIR_NAME = "tifjpg-smoke"
 CYRILLIC_PARTS = ("Тест", "Объект №1")
 REPORT_NAME = "smoke_report.txt"
+SCAN_REPORT_NAME = "scan_report.txt"
 
 
 class Report:
@@ -220,10 +221,10 @@ def run_checks():
     return report
 
 
-def write_report(report):
-    text = report.text()
+def write_text(name, text):
+    """Сохранить текст рядом с exe, а если туда нельзя — в рабочую папку."""
     for folder in (app_dir(), work_dir()):
-        path = os.path.join(folder, REPORT_NAME)
+        path = os.path.join(folder, name)
         try:
             with open(path, "w", encoding="utf-8") as stream:
                 stream.write(text + "\n")
@@ -231,6 +232,10 @@ def write_report(report):
         except OSError:
             continue
     return None
+
+
+def write_report(report):
+    return write_text(REPORT_NAME, report.text())
 
 
 class SmokeWindow:
@@ -261,6 +266,8 @@ class SmokeWindow:
         buttons.pack(fill="x", pady=(8, 0))
         self.choose_button = ttk.Button(buttons, text="Конвертировать свой TIFF…", command=self.choose)
         self.choose_button.pack(side="left")
+        self.scan_button = ttk.Button(buttons, text="Проверить папку (без изменений)…", command=self.choose_folder)
+        self.scan_button.pack(side="left", padx=8)
         ttk.Button(buttons, text="Открыть папку с результатами", command=self.open_work_dir).pack(side="left", padx=8)
         ttk.Button(buttons, text="Закрыть", command=self.root.destroy).pack(side="right")
 
@@ -268,12 +275,58 @@ class SmokeWindow:
         self.root.after(100, self.poll)
 
     def refresh(self):
-        self.text.configure(state="normal")
-        self.text.delete("1.0", "end")
-        self.text.insert("end", self.report.text())
-        self.text.configure(state="disabled")
+        self.show(self.report.text())
         path = write_report(self.report)
         self.status.configure(text="Отчёт: {}".format(path or "не удалось сохранить"))
+
+    def show(self, text):
+        self.text.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.insert("end", text)
+        self.text.configure(state="disabled")
+
+    def set_busy(self, busy):
+        self.busy = busy
+        state = "disabled" if busy else "normal"
+        self.choose_button.configure(state=state)
+        self.scan_button.configure(state=state)
+
+    def choose_folder(self):
+        """Сухой прогон по дереву папок: только чтение, ничего не меняется."""
+        from tkinter import filedialog
+
+        if self.busy:
+            return
+        root = filedialog.askdirectory(title="Выберите корневую папку — файлы только читаются")
+        if not root:
+            return
+        self.set_busy(True)
+        self.progress["value"] = 0
+        self.status.configure(text="Проверка папки…")
+        threading.Thread(target=self.scan_folder, args=(root,), daemon=True).start()
+
+    def scan_folder(self, root):
+        from tifjpg.app.scan import render_report, scan_root
+
+        started = time.monotonic()
+        try:
+            seen = [0]
+
+            def on_folder(plan):
+                seen[0] += 1
+                if seen[0] % 20 == 0:
+                    self.events.put(("scan_progress", seen[0], plan.folder))
+
+            result = scan_root(root, on_folder=on_folder)
+            text = render_report(result, full=True)
+            path = write_text(SCAN_REPORT_NAME, text)
+            detail = "{}: папок {}, к обработке {} файлов в {} папках, готовых {}, конфликтов {}; {:.1f} с; отчёт: {}".format(
+                root, result.folders_seen, result.total_files, len(result.to_process),
+                len(result.by_kind("done")), len(result.by_kind("conflict")),
+                time.monotonic() - started, path)
+            self.events.put(("scan_done", "OK", detail, text))
+        except Exception as exc:
+            self.events.put(("scan_done", "FAIL", "{}: {}: {}".format(root, exc.__class__.__name__, exc), ""))
 
     def open_work_dir(self):
         if sys.platform == "win32":
@@ -327,11 +380,23 @@ class SmokeWindow:
                     _, stage, fraction = event
                     self.progress["value"] = fraction * 100
                     self.status.configure(text="{}: {:.0f} %".format(stage, fraction * 100))
+                elif event[0] == "scan_progress":
+                    _, count, folder = event
+                    self.status.configure(text="Проверено папок: {} — {}".format(count, folder))
+                elif event[0] == "scan_done":
+                    _, status, detail, text = event
+                    self.report.add(status, "Проверка папки", detail)
+                    self.set_busy(False)
+                    write_report(self.report)
+                    if text:
+                        self.show(text)
+                        self.status.configure(text=detail)
+                    else:
+                        self.refresh()
                 else:
                     _, status, detail = event
                     self.report.add(status, "Ручная конвертация", detail)
-                    self.busy = False
-                    self.choose_button.configure(state="normal")
+                    self.set_busy(False)
                     self.refresh()
         except queue.Empty:
             pass
