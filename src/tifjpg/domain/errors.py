@@ -30,6 +30,27 @@ class UnsupportedImageError(FileProcessingError):
     """Файл читается, но его параметры не поддерживаются конвертером."""
 
 
+class TransientNetworkError(TifJpgError):
+    """Временный сбой сети или диска: операцию можно повторить."""
+
+    def __init__(self, operation, cause):
+        super().__init__("{}: {}".format(operation, cause))
+        self.operation = operation
+        self.cause = cause
+
+
+class PreconditionError(TifJpgError):
+    """Условия для обработки не выполнены: нет места, нет прав, длинный путь."""
+
+
+class IntegrityError(FileProcessingError):
+    """Копия не совпала с оригиналом — оригинал не трогаем."""
+
+
+class JournalError(TifJpgError):
+    """Журнал недоступен: без него обработка запрещена (ARCHITECTURE.md, 10.4)."""
+
+
 class ConversionCancelled(TifJpgError):
     """Конвертация остановлена пользователем."""
 
