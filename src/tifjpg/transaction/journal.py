@@ -12,6 +12,7 @@ import json
 import os
 import socket
 import threading
+import uuid
 
 from tifjpg.domain.errors import JournalError
 
@@ -87,10 +88,15 @@ def session_header(root, app_version, rules, extra=None):
 
 
 def session_filename(now=None):
-    """Имя файла сессии: у каждой сессии свой файл, конкурентной записи нет."""
+    """Имя файла сессии: у каждой сессии свой файл, конкурентной записи нет.
+
+    Случайный суффикс нужен потому, что времени с точностью до секунды и pid
+    не хватает: два запуска подряд в одном процессе давали одно имя.
+    """
     now = now or datetime.datetime.now()
-    return "{}_{}_{}_{}.jsonl".format(
-        now.strftime("%Y%m%d-%H%M%S"), _safe(socket.gethostname), _safe(getpass.getuser), os.getpid())
+    return "{}_{}_{}_{}_{}.jsonl".format(
+        now.strftime("%Y%m%d-%H%M%S"), _safe(socket.gethostname), _safe(getpass.getuser),
+        os.getpid(), uuid.uuid4().hex[:6])
 
 
 def read_journal(path):

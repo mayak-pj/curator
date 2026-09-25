@@ -41,6 +41,16 @@ def build_parser():
                       choices=folder_rules.available(), help="набор правил классификации папок")
     scan.add_argument("--json", help="сохранить отчёт в JSON")
     scan.set_defaults(handler=cmd_scan)
+
+    process = commands.add_parser("process", help="обработать дерево папок (изменяет файлы)")
+    process.add_argument("root")
+    process.add_argument("--rollback-all", action="store_true",
+                         help="сразу откатить всё, что было обработано (проверка отката)")
+    process.set_defaults(handler=cmd_process)
+
+    recover = commands.add_parser("recover", help="незавершённые операции прошлых запусков")
+    recover.add_argument("--action", choices=("show", "continue", "rollback"), default="show")
+    recover.set_defaults(handler=cmd_recover)
     return parser
 
 
@@ -79,6 +89,58 @@ def cmd_scan(args):
         print("JSON: {}".format(args.json))
 
     return 1 if (result.by_kind(CONFLICT) or result.blocked or result.errors) else 0
+
+
+def cmd_process(args):
+    from tifjpg.app import events as ev
+    from tifjpg.app.service import ProcessingService
+
+    def show(event):
+        kind = event.get("kind")
+        if kind == ev.FOLDER_STARTED:
+            print("папка {} ({} файлов)".format(event["folder"], event["files"]))
+        elif kind == ev.FILE_COMPLETED:
+            print("   готов файл #{}".format(event["index"]))
+        elif kind in (ev.PROBLEM, ev.FOLDER_SKIPPED):
+            print("   ! {}".format(event.get("message") or event.get("reason")))
+        elif kind == ev.RETRY:
+            print("   повтор {}: попытка {}, пауза {} с".format(
+                event["operation"], event["attempt"], event["delay"]))
+
+    service = ProcessingService(on_event=show)
+    summary = service.start(args.root)
+    print("\nУспешно {}, с ошибками {}, пропущено занятых {}, файлов обработано {}, за {} с".format(
+        len(summary.succeeded), len(summary.failed), summary.skipped_locked, summary.files, summary.seconds))
+    for outcome in summary.failed:
+        print("  {} — {}{}".format(outcome.folder, outcome.error,
+                                   " (откат выполнен)" if outcome.rolled_back else ""))
+    if args.rollback_all:
+        for result in service.rollback_all():
+            print("откат {}: {} {}".format(result.folder, result.state, "; ".join(result.warnings)))
+        service.close()
+    else:
+        service.accept()
+    print("Журнал и логи: {}".format(service.paths.base))
+    return 0 if not summary.failed else 1
+
+
+def cmd_recover(args):
+    from tifjpg.app.service import CONTINUE, ROLLBACK, ProcessingService
+
+    service = ProcessingService()
+    found = service.find_recovery()
+    if not found:
+        print("Незавершённых операций не найдено")
+        return 0
+    for journal_path, item in found:
+        print("{}\n   состояние: {}\n   журнал: {}".format(item.folder, item.situation, journal_path))
+        for detail in item.details:
+            print("   {}".format(detail))
+        if args.action != "show":
+            result = service.recover(item, CONTINUE if args.action == "continue" else ROLLBACK)
+            print("   результат: {}".format(getattr(result, "state", "готово")))
+    service.close()
+    return 0
 
 
 def _print_progress(stage, fraction):
