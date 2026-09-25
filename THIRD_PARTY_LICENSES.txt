@@ -1,0 +1,77 @@
+TifJpg — сторонние компоненты и их лицензии
+===========================================
+
+Программа распространяется внутри организации в виде папки с файлами. Все
+компоненты — свободное ПО, пригодное для коммерческого и внутреннего
+использования. Платных компонентов нет.
+
+Исполняемая среда
+-----------------
+
+CPython 3.8.10                 Python Software Foundation License 2.0
+Tcl/Tk 8.6 (tkinter)           BSD-подобная лицензия Tcl/Tk
+pyvips 3.2.0                   MIT
+cffi 1.17.1                    MIT
+pycparser 2.23                 BSD 3-Clause
+
+Инструмент сборки (в поставку не входит)
+----------------------------------------
+
+PyInstaller 6.22.3             GPL 2.0 с исключением: собранные программы
+                               не обязаны распространяться под GPL
+pytest, pefile                 MIT (только разработка)
+
+Библиотека обработки изображений
+--------------------------------
+
+libvips 8.15.1 и его зависимости поставляются как **немодифицированные
+динамические библиотеки** (файлы .dll в папке _internal), сборка
+`vips-dev-w64-web` из проекта libvips/build-win64-mxe.
+
+Основная лицензия libvips — LGPL 2.1 или более поздняя. Полный текст
+лежит в файле `_internal\licenses\libvips-LICENSE.txt`, точные версии всех
+компонентов — в `_internal\licenses\libvips-versions.json`.
+
+Условия LGPL соблюдаются так: библиотеки подключены динамически, не
+изменялись, их можно заменить на другую сборку, положив свои .dll в папку
+`_internal`. Исходные тексты и сборочные скрипты доступны в проектах
+https://github.com/libvips/libvips и https://github.com/libvips/build-win64-mxe.
+
+Состав сборки libvips 8.15.1 (версии из versions.json) и лицензии:
+
+  libvips 8.15.1               LGPL 2.1+
+  glib 2.78.3                  LGPL 2.1+
+  cairo 1.18.0                 LGPL 2.1 / MPL 1.1
+  pango 1.51.0                 LGPL 2.0+
+  librsvg 2.57.1               LGPL 2.1+
+  gdk-pixbuf 2.42.10           LGPL 2.1+
+  libexif 0.6.24               LGPL 2.1+
+  libheif 1.17.5               LGPL 3 (кодек aom — BSD 2-Clause)
+  fribidi 1.0.13               LGPL 2.1+
+  freetype 2.13.2              FreeType License (BSD-подобная) или GPL 2
+  libtiff 4.6.0                BSD-подобная лицензия libtiff
+  mozjpeg 4.1.5                BSD 3-Clause / IJG
+  libpng 1.6.40                PNG Reference Library License v2
+  libspng 0.7.4                BSD 2-Clause
+  libwebp 1.3.2                BSD 3-Clause
+  aom 3.8.0                    BSD 2-Clause
+  cgif 0.3.2                   MIT
+  lcms2 2.16                   MIT
+  libimagequant 2.4.1          BSD 2-Clause (версия до смены лицензии)
+  libxml2 2.12.3               MIT
+  expat 2.5.0                  MIT
+  fontconfig 2.14.2            MIT-подобная лицензия fontconfig
+  harfbuzz 8.3.0               MIT (Old)
+  highway 1.0.7                Apache 2.0
+  libarchive 3.7.2             BSD 2-Clause
+  libffi 3.4.4                 MIT
+  pixman 0.42.2                MIT
+  zlib-ng 2.1.5                zlib License
+  proxy-libintl 0.4            LGPL 2.1+
+  libc++ / libunwind (LLVM)    Apache 2.0 с исключением LLVM
+
+Что программа НЕ делает
+-----------------------
+
+Не отправляет наружу ничего: ни файлы, ни имена папок, ни статистику.
+Интернет для работы не требуется. Телеметрии нет.

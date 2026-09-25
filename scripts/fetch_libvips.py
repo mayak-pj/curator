@@ -49,22 +49,35 @@ def download(cache_dir):
     return archive
 
 
+# Из архива берём не только DLL: лицензия и список версий компонентов едут в сборку.
+EXTRA_FILES = {"LICENSE": "libvips-LICENSE.txt", "versions.json": "libvips-versions.json"}
+
+
 def extract_dlls(archive, dest):
     os.makedirs(dest, exist_ok=True)
     for name in os.listdir(dest):
         if name.lower().endswith(".dll"):
             os.remove(os.path.join(dest, name))
     count = 0
+    extras = []
     with zipfile.ZipFile(archive) as bundle:
         for member in bundle.infolist():
             parts = member.filename.split("/")
             if len(parts) == 3 and parts[1] == "bin" and parts[2].lower().endswith(".dll"):
-                with bundle.open(member) as source, open(os.path.join(dest, parts[2]), "wb") as target:
-                    shutil.copyfileobj(source, target)
+                _write(bundle, member, os.path.join(dest, parts[2]))
                 count += 1
+            elif len(parts) == 2 and parts[1] in EXTRA_FILES:
+                _write(bundle, member, os.path.join(dest, EXTRA_FILES[parts[1]]))
+                extras.append(EXTRA_FILES[parts[1]])
     if not count:
         raise SystemExit("В архиве не найдено DLL")
-    print("libvips {}: распаковано {} DLL в {}".format(LIBVIPS_VERSION, count, dest))
+    print("libvips {}: распаковано {} DLL в {} (+ {})".format(
+        LIBVIPS_VERSION, count, dest, ", ".join(sorted(extras)) or "без лицензии"))
+
+
+def _write(bundle, member, target):
+    with bundle.open(member) as source, open(target, "wb") as stream:
+        shutil.copyfileobj(source, stream)
 
 
 def main(argv=None):

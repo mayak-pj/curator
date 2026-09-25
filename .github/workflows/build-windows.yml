@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 jobs:
-  smoke:
+  build:
     runs-on: windows-2022
     env:
       PYTHONUTF8: "1"
@@ -34,29 +34,67 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
-      - name: Build smoke exe
+      # ------------------------------------------------------------ сборка
+
+      - name: Build application
+        run: python -m PyInstaller packaging/tifjpg.spec --noconfirm --distpath dist --workpath build/pyinstaller
+
+      - name: Build smoke tool
         run: python -m PyInstaller packaging/smoke.spec --noconfirm --distpath dist --workpath build/pyinstaller
 
-      - name: Check bundle imports for Windows 7
-        run: python scripts/check_pe_imports.py dist/tifjpg_smoke --report dist/tifjpg_smoke/pe_imports_report.txt
+      - name: Check bundles for Windows 7
+        run: |
+          python scripts/check_pe_imports.py dist/tifjpg --report dist/tifjpg/pe_imports_report.txt
+          python scripts/check_pe_imports.py dist/tifjpg_smoke --report dist/tifjpg_smoke/pe_imports_report.txt
 
-      - name: Run smoke checks headless
+      # -------------------------------------------------- проверка собранного
+
+      - name: Smoke checks of the packaged tool
         shell: pwsh
         env:
-          # Собранный exe обязан брать DLL из своей сборки, а не из build/vips.
           TIFJPG_VIPS_DIR: ""
         run: |
-          if (Test-Path dist\tifjpg_smoke\_internal\ucrtbase.dll) { throw "ucrtbase.dll попал в сборку" }
-          if (-not (Test-Path dist\tifjpg_smoke\_internal\libvips-42.dll)) { throw "libvips-42.dll нет в сборке" }
-          Write-Host ("DLL в _internal: " + (Get-ChildItem dist\tifjpg_smoke\_internal\*.dll).Count)
+          if (Test-Path dist\tifjpg\_internal\ucrtbase.dll) { throw "ucrtbase.dll попал в сборку" }
+          if (-not (Test-Path dist\tifjpg\_internal\libvips-42.dll)) { throw "libvips-42.dll нет в сборке" }
           $process = Start-Process -FilePath dist\tifjpg_smoke\tifjpg_smoke.exe -ArgumentList "--no-gui" -Wait -PassThru
           Get-Content -Encoding UTF8 dist\tifjpg_smoke\smoke_report.txt
           Remove-Item dist\tifjpg_smoke\smoke_report.txt
-          exit $process.ExitCode
+          if ($process.ExitCode -ne 0) { throw "smoke завершился с кодом $($process.ExitCode)" }
+
+      - name: End-to-end run of the packaged application
+        shell: pwsh
+        env:
+          TIFJPG_VIPS_DIR: ""
+        run: |
+          python scripts/e2e_tree.py create build\e2e
+          $run = Start-Process -FilePath dist\tifjpg\tifjpg.exe -ArgumentList "process","build\e2e" -Wait -PassThru
+          if ($run.ExitCode -ne 0) { throw "обработка завершилась с кодом $($run.ExitCode)" }
+          python scripts/e2e_tree.py check build\e2e --state processed
+
+          python scripts/e2e_tree.py create build\e2e_rollback
+          $rollback = Start-Process -FilePath dist\tifjpg\tifjpg.exe -ArgumentList "process","build\e2e_rollback","--rollback-all" -Wait -PassThru
+          if ($rollback.ExitCode -ne 0) { throw "откат завершился с кодом $($rollback.ExitCode)" }
+          python scripts/e2e_tree.py check build\e2e_rollback --state original
+
+          $scan = Start-Process -FilePath dist\tifjpg\tifjpg.exe -ArgumentList "scan","build\e2e","--json","build\scan.json" -Wait -PassThru
+          if (-not (Test-Path build\scan.json)) { throw "scan не создал отчёт" }
+          Get-Content -Encoding UTF8 dist\tifjpg\logs\*.log | Select-Object -Last 8
+
+      # ---------------------------------------------------------- упаковка
 
       - name: Package
         shell: pwsh
-        run: Compress-Archive -Path dist\tifjpg_smoke -DestinationPath tifjpg_smoke-win7-x64.zip
+        run: |
+          Remove-Item -Recurse -Force dist\tifjpg\journal, dist\tifjpg\logs, dist\tifjpg\locks -ErrorAction SilentlyContinue
+          Copy-Item README.md, TROUBLESHOOTING.md, THIRD_PARTY_LICENSES.txt dist\tifjpg\
+          Copy-Item packaging\config.example.json dist\tifjpg\
+          Compress-Archive -Path dist\tifjpg -DestinationPath tifjpg-win7-x64.zip
+          Compress-Archive -Path dist\tifjpg_smoke -DestinationPath tifjpg_smoke-win7-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tifjpg-win7-x64
+          path: tifjpg-win7-x64.zip
 
       - uses: actions/upload-artifact@v4
         with:

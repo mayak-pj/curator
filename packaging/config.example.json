@@ -1,0 +1,15 @@
+{
+  "jpeg_quality": 100,
+  "tone": {
+    "method": "linear",
+    "p_low": 0.5,
+    "p_high": 99.5,
+    "exclude_extremes": false
+  },
+  "folder_rules": "default_v1",
+  "vips_concurrency": 2,
+  "network_retry_delays_s": [5, 15, 30, 60, 120],
+  "log_level": "INFO",
+  "lock_stale_minutes": 10,
+  "check_free_space": true
+}
