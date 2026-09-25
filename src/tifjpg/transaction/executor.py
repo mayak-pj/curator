@@ -120,7 +120,7 @@ class FolderExecutor:
             file_result.signature = file_signature(planned.source)
             self._step(file_result, states.PLANNED, None,
                        source=planned.source, jpeg=planned.jpeg, archive=planned.archive,
-                       signature=file_result.signature)
+                       signature=file_result.signature, source_in_archive=planned.source_in_archive)
 
             stage = os.path.join(temp_dir, "{:04d}_{}".format(planned.index, os.path.basename(planned.source)))
             local_jpeg = os.path.join(temp_dir, "{:04d}.jpeg".format(planned.index))
@@ -131,17 +131,23 @@ class FolderExecutor:
                                       is_cancelled=self._is_cancelled)
 
             _, source_hash = self._step(file_result, states.STAGED,
-                                        lambda: self._retry(download, "чтение оригинала"))
+                                        lambda: self._retry(download, "чтение оригинала"),
+                                        after=lambda value: {"source_hash": value[1], "bytes": value[0]})
             file_result.source_hash = source_hash
 
-            conversion = self._step(file_result, states.CONVERTED, lambda: self._convert(stage, local_jpeg, planned))
+            conversion = self._step(file_result, states.CONVERTED,
+                                    lambda: self._convert(stage, local_jpeg, planned),
+                                    after=lambda value: {"jpeg_bytes": value.output_bytes,
+                                                         "window": list(value.window), "tone": value.tone,
+                                                         "seconds": value.seconds})
             file_result.jpeg_bytes = conversion.output_bytes
 
             def validate():
                 validate_jpeg(local_jpeg, conversion.width, conversion.height, conversion.bands)
                 return file_hash(local_jpeg, chunk_size=self.options.chunk_size)
 
-            file_result.jpeg_hash = self._step(file_result, states.VALIDATED, validate)
+            file_result.jpeg_hash = self._step(file_result, states.VALIDATED, validate,
+                                               after=lambda value: {"jpeg_hash": value})
 
             def upload_jpeg():
                 _, digest = safe_copy.copy_verified(local_jpeg, planned.jpeg, chunk_size=self.options.chunk_size,
@@ -167,7 +173,8 @@ class FolderExecutor:
                     return digest
 
                 self._step(file_result, states.SOURCE_COPIED,
-                           lambda: self._retry(copy_original, "копирование оригинала в архив"))
+                           lambda: self._retry(copy_original, "копирование оригинала в архив"),
+                           after=lambda value: {"archive_hash": value})
 
             safe_copy.remove_quietly(stage)
             safe_copy.remove_quietly(local_jpeg)
@@ -232,13 +239,19 @@ class FolderExecutor:
 
     # ------------------------------------------------------------- служебное
 
-    def _step(self, file_result, state, action, **fields):
-        """Намерение в журнал -> действие -> отметка о выполнении."""
+    def _step(self, file_result, state, action, after=None, **fields):
+        """Намерение в журнал -> действие -> отметка о выполнении.
+
+        after(value) возвращает поля, которые становятся известны только
+        после действия (хеши, размеры) — без них откат работать не сможет.
+        """
         states.check_transition(file_result.state, state)
-        self.journal.file_state(self._folder_of(file_result), file_result.index, state, phase="intent", **fields)
+        folder = self._folder_of(file_result)
+        self.journal.file_state(folder, file_result.index, state, phase="intent", **fields)
         value = action() if action is not None else None
         file_result.state = state
-        self.journal.file_state(self._folder_of(file_result), file_result.index, state, phase="done")
+        self.journal.file_state(folder, file_result.index, state, phase="done",
+                                **(after(value) if after is not None else {}))
         return value
 
     @staticmethod
