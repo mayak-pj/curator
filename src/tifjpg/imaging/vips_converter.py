@@ -48,6 +48,7 @@ class VipsTiffJpegConverter(ImageConverter):
             warnings.append("тег Orientation = {} не применяется".format(header.tag(274)))
 
         tracker = _ProgressTracker(progress, is_cancelled)
+        tracker.raise_if_cancelled(source)
         destination_created = False
         try:
             image = self._open(vips, source)
@@ -76,6 +77,9 @@ class VipsTiffJpegConverter(ImageConverter):
             tracker.watch(output, STAGE_ENCODE, encode_start, 1.0 - encode_start)
             destination_created = True
             output.jpegsave(destination, Q=options.quality, optimize_coding=False, interlace=False)
+            # Маленький снимок может успеть записаться до первого сигнала прогресса:
+            # проверяем отмену и после записи, чтобы результата точно не осталось.
+            tracker.raise_if_cancelled(source)
         except vips.Error as exc:
             if destination_created:
                 _remove_quietly(destination)
