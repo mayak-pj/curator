@@ -61,10 +61,11 @@ jobs:
           Remove-Item dist\tifjpg_smoke\smoke_report.txt
           if ($process.ExitCode -ne 0) { throw "smoke завершился с кодом $($process.ExitCode)" }
 
+      # Переменную TIFJPG_VIPS_DIR здесь не сбрасываем: она нужна вспомогательным
+      # скриптам на обычном Python. Собранный exe её игнорирует и берёт DLL
+      # только из своей папки — это проверяет предыдущий шаг.
       - name: End-to-end run of the packaged application
         shell: pwsh
-        env:
-          TIFJPG_VIPS_DIR: ""
         run: |
           python scripts/e2e_tree.py create build\e2e
           $run = Start-Process -FilePath dist\tifjpg\tifjpg.exe -ArgumentList "process","build\e2e" -Wait -PassThru
