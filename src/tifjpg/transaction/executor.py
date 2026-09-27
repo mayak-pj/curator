@@ -28,6 +28,13 @@ JPEG_SIZE_FACTOR = 0.5
 TEMP_PREFIX = "tifjpg-"
 RENAME_SUFFIX = ".rename.part"
 
+# Шаги, где файл целиком идёт по сети (чтение оригинала, запись JPEG,
+# копирование оригинала в архив) — единственные, о начале которых стоит
+# сообщать в интерфейс отдельно (ARCHITECTURE.md не хватает байтового
+# прогресса copy_with_hash/copy_verified, а без этого сигнала статус
+# "encode 100%" от предыдущего файла висит всё время, пока идёт копирование).
+NETWORK_STEP_STATES = (states.STAGED, states.JPEG_UPLOADED, states.SOURCE_COPIED)
+
 
 @dataclass(frozen=True)
 class ExecutionOptions:
@@ -244,10 +251,17 @@ class FolderExecutor:
 
         after(value) возвращает поля, которые становятся известны только
         после действия (хеши, размеры) — без них откат работать не сможет.
+
+        Для сетевых шагов (чтение/запись по R:/N:) отдельно шлём "progress"
+        без доли выполнения: сам файл может копироваться десятки секунд, а
+        конвертация — меньше секунды, и без этого сигнала окно долго не
+        меняет текст и выглядит зависшим (см. my_reports, этап 9).
         """
         states.check_transition(file_result.state, state)
         folder = self._folder_of(file_result)
         self.journal.file_state(folder, file_result.index, state, phase="intent", **fields)
+        if state in NETWORK_STEP_STATES:
+            self._emit("progress", index=file_result.index, stage=state, fraction=None)
         value = action() if action is not None else None
         file_result.state = state
         self.journal.file_state(folder, file_result.index, state, phase="done",

@@ -12,11 +12,20 @@ from tkinter import filedialog, messagebox, ttk
 from tifjpg import __version__
 from tifjpg.app import events as ev
 from tifjpg.app.service import ProcessingService
+from tifjpg.domain import states
 from tifjpg.domain.errors import TifJpgError
 from tifjpg.gui import recovery_dialog, status as status_module, theme
 from tifjpg.gui.bridge import TASK_DONE, TASK_FAILED, Worker
 from tifjpg.gui.error_panel import ErrorPanel
 from tifjpg.gui.folder_list import FolderList
+
+# Подписи для сетевых шагов (executor.NETWORK_STEP_STATES) — без них статус
+# "encode 100 %" висит на экране всё время, пока файл копируется по сети.
+NETWORK_STEP_LABELS = {
+    states.STAGED: "чтение оригинала",
+    states.JPEG_UPLOADED: "запись JPEG",
+    states.SOURCE_COPIED: "копирование оригинала в архив",
+}
 
 
 class MainWindow:
@@ -181,6 +190,9 @@ class MainWindow:
         elif kind == ev.PROGRESS and event.get("stage") in ("histogram", "encode"):
             self.status_var.set("Файл #{}: {} {:.0f} %".format(
                 event.get("index", "?"), event["stage"], event.get("fraction", 0) * 100))
+        elif kind == ev.PROGRESS and event.get("stage") in NETWORK_STEP_LABELS:
+            self.status_var.set("Файл #{}: {}…".format(
+                event.get("index", "?"), NETWORK_STEP_LABELS[event["stage"]]))
         elif kind == ev.PROGRESS and event.get("stage") == "scan":
             self.status_var.set("Просмотр: {}".format(event["folder"]))
         elif kind == ev.RETRY:
