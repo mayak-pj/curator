@@ -204,7 +204,7 @@ def test_cyrillic_and_spaces_in_paths(converter, tmp_path):
     folder = tmp_path / "Тест" / "Объект №1"
     folder.mkdir(parents=True)
     source = write_tiff(folder / "снимок 1.tif", W, H, gradient(W, H, 0, 65535))
-    destination = str(folder / "Рентгенограмма_1.jpeg")
+    destination = str(folder / "Рентгенограмма 1.jpeg")
 
     result = converter.convert(source, destination, options("percentile"))
 

@@ -48,7 +48,7 @@ def test_r6_nothing_to_do():
 
 
 def test_jpegs_without_tiffs_are_done_not_conflict():
-    assert classify(snapshot(files=["Рентгенограмма_1.jpeg"]), naming).kind == DONE
+    assert classify(snapshot(files=["Рентгенограмма 1.jpeg"]), naming).kind == DONE
 
 
 def test_foreign_jpegs_do_not_matter():

@@ -1,6 +1,6 @@
 """Схема именования (ARCHITECTURE.md, разделы 7 и 6).
 
-Программа создаёт имена вида `Рентгенограмма_1.jpeg`, но обработанной
+Программа создаёт имена вида `Рентгенограмма 1.jpeg`, но обработанной
 считает и папку, где человек назвал файлы иначе — `Рентгенограмма 1.jpg`,
 `рентгенограмма-1.jpeg` и т. п. Поэтому признак «наш результат» —
 вхождение слова, а не точный шаблон (решение D15).
@@ -44,10 +44,10 @@ class XrayNaming(NamingScheme):
         return self.archive_dir
 
     def jpeg_name(self, index):
-        return "{}_{}{}".format(self.prefix, index, self.jpeg_extension)
+        return "{} {}{}".format(self.prefix, index, self.jpeg_extension)
 
     def source_name(self, index):
-        return "{}_{}{}".format(self.prefix, index, self.source_extension)
+        return "{} {}{}".format(self.prefix, index, self.source_extension)
 
     def is_processed_jpeg(self, filename):
         stem, extension = os.path.splitext(filename)

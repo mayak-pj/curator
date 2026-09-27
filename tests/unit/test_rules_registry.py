@@ -31,7 +31,7 @@ def test_rule_set_can_be_replaced_without_touching_the_core():
     ))
     classify = folder_rules.get("test_v2")
 
-    processed = snapshot(files=["1.tif", "Рентгенограмма_1.jpeg"])
+    processed = snapshot(files=["1.tif", "Рентгенограмма 1.jpeg"])
     assert classify(processed, naming).rule == "X1"
     assert classify(snapshot(files=["readme.txt"]), naming).rule == "X2"
     # Набор по умолчанию не изменился.

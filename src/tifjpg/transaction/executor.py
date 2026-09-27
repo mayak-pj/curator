@@ -224,7 +224,7 @@ class FolderExecutor:
     def _free_occupied_names(self, plan, result):
         """Переименование внутри архива: сначала уводим оригиналы на временные имена.
 
-        Иначе «Рентгенограмма 2.tif» -> «Рентгенограмма_1.tif» затёрло бы соседний снимок.
+        Иначе «Рентгенограмма 2.tif» -> «Рентгенограмма 1.tif» затёрло бы соседний снимок.
         """
         current = {planned.index: planned.source for planned in plan.files}
         if not plan.two_step_renames:

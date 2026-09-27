@@ -187,7 +187,7 @@ def check_conversion(compression):
         folder = os.path.join(work_dir(), *CYRILLIC_PARTS)
         os.makedirs(folder, exist_ok=True)
         source = os.path.join(folder, "снимок {}.tif".format(compression))
-        destination = os.path.join(folder, "Рентгенограмма_{}.jpeg".format(compression))
+        destination = os.path.join(folder, "Рентгенограмма {}.jpeg".format(compression))
         for path in (source, destination):
             if os.path.exists(path):
                 os.remove(path)
@@ -346,9 +346,9 @@ class SmokeWindow:
         folder = os.path.join(work_dir(), "manual")
         os.makedirs(folder, exist_ok=True)
         index = 1
-        while os.path.exists(os.path.join(folder, "Рентгенограмма_{}.jpeg".format(index))):
+        while os.path.exists(os.path.join(folder, "Рентгенограмма {}.jpeg".format(index))):
             index += 1
-        destination = os.path.join(folder, "Рентгенограмма_{}.jpeg".format(index))
+        destination = os.path.join(folder, "Рентгенограмма {}.jpeg".format(index))
         self.busy = True
         self.choose_button.configure(state="disabled")
         self.progress["value"] = 0

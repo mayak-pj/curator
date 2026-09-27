@@ -22,8 +22,8 @@ def names(plan, attribute):
 def test_numbering_follows_natural_order():
     plan = make_plan(["снимок 10.tif", "снимок 2.tif", "снимок 1.tif"])
     assert names(plan, "source") == ["снимок 1.tif", "снимок 2.tif", "снимок 10.tif"]
-    assert names(plan, "jpeg") == ["Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg", "Рентгенограмма_3.jpeg"]
-    assert names(plan, "archive") == ["Рентгенограмма_1.tif", "Рентгенограмма_2.tif", "Рентгенограмма_3.tif"]
+    assert names(plan, "jpeg") == ["Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg", "Рентгенограмма 3.jpeg"]
+    assert names(plan, "archive") == ["Рентгенограмма 1.tif", "Рентгенограмма 2.tif", "Рентгенограмма 3.tif"]
     assert plan.ok and plan.creates_archive_dir
 
 
@@ -39,7 +39,7 @@ def test_new_archive_dir_is_uppercase():
 
 def test_tiff_extension_is_normalised():
     plan = make_plan(["снимок.TIFF"])
-    assert names(plan, "archive") == ["Рентгенограмма_1.tif"]
+    assert names(plan, "archive") == ["Рентгенограмма 1.tif"]
 
 
 def test_jpegs_go_next_to_archive_not_into_it():
@@ -50,33 +50,33 @@ def test_jpegs_go_next_to_archive_not_into_it():
 
 
 def test_reports_two_step_rename_inside_archive():
-    plan = make_plan(archive_dir="ИСХ", archive_files=["Рентгенограмма_2.tif", "снимок.tif"])
+    plan = make_plan(archive_dir="ИСХ", archive_files=["Рентгенограмма 2.tif", "снимок.tif"])
     assert plan.two_step_renames
     assert not plan.problems
 
 
 def test_no_two_step_when_names_already_correct():
-    plan = make_plan(archive_dir="ИСХ", archive_files=["Рентгенограмма_1.tif", "Рентгенограмма_2.tif"])
+    plan = make_plan(archive_dir="ИСХ", archive_files=["Рентгенограмма 1.tif", "Рентгенограмма 2.tif"])
     assert not plan.two_step_renames
     assert all(planned.archive_unchanged for planned in plan.files)
 
 
 def test_existing_target_jpeg_blocks_folder():
-    plan = make_plan(["1.tif", "2.tif", "схема.jpg", "Рентгенограмма_1.jpeg".upper()])
+    plan = make_plan(["1.tif", "2.tif", "схема.jpg", "Рентгенограмма 1.jpeg".upper()])
     # JPEG по шаблону есть, но количество не совпадает -> конфликт, план пустой
     assert not plan.decision.processable
     assert not plan.files
 
 
 def test_leftover_part_file_is_a_problem():
-    plan = make_plan(["1.tif", "Рентгенограмма_1.jpeg.part"])
+    plan = make_plan(["1.tif", "Рентгенограмма 1.jpeg.part"])
     assert any("временный файл" in problem for problem in plan.problems)
     assert not plan.ok
 
 
 def test_tiffs_in_folder_and_archive_are_a_conflict():
     # До проверки занятых имён дело не доходит: такую папку правила не отдают в обработку.
-    plan = make_plan(["1.tif"], archive_dir="ИСХ", archive_files=["Рентгенограмма_1.tif"])
+    plan = make_plan(["1.tif"], archive_dir="ИСХ", archive_files=["Рентгенограмма 1.tif"])
     assert plan.decision.rule == "R5"
     assert not plan.files
 
@@ -84,7 +84,7 @@ def test_tiffs_in_folder_and_archive_are_a_conflict():
 def test_occupied_name_in_archive_is_a_problem():
     # Защита планировщика: решение приходит извне, а целевое имя в архиве занято.
     snapshot = FolderSnapshot(path=FOLDER, files=("1.tif",), archive_dir="ИСХ",
-                              archive_files=("Рентгенограмма_1.tif",))
+                              archive_files=("Рентгенограмма 1.tif",))
     decision = FolderDecision(PROCESS_ROOT, "R3", "передано вручную")
     plan = plan_folder(snapshot, decision, naming)
     assert any("в архиве уже есть" in problem for problem in plan.problems)

@@ -7,13 +7,13 @@ naming = XrayNaming()
 
 
 def test_generated_names():
-    assert naming.jpeg_name(1) == "Рентгенограмма_1.jpeg"
-    assert naming.source_name(12) == "Рентгенограмма_12.tif"
+    assert naming.jpeg_name(1) == "Рентгенограмма 1.jpeg"
+    assert naming.source_name(12) == "Рентгенограмма 12.tif"
     assert naming.archive_dir_name() == "ИСХ"
 
 
 @pytest.mark.parametrize("filename", [
-    "Рентгенограмма_1.jpeg",
+    "Рентгенограмма 1.jpeg",
     "Рентгенограмма 1.jpeg",     # как называл человек раньше
     "рентгенограмма-3.jpg",
     "РЕНТГЕНОГРАММА_5.JPEG",
@@ -26,8 +26,8 @@ def test_recognises_processed_jpegs(filename):
 
 @pytest.mark.parametrize("filename", [
     "снимок 1.jpeg",
-    "Рентгенограмма_1.tif",      # не JPEG
-    "Рентгенограмма_1.jpeg.part",
+    "Рентгенограмма 1.tif",      # не JPEG
+    "Рентгенограмма 1.jpeg.part",
     "schema.jpg",
 ])
 def test_ignores_other_files(filename):

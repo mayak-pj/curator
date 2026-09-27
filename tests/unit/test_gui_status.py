@@ -25,19 +25,19 @@ def test_folder_to_process_is_neutral_with_file_count():
 
 
 def test_already_processed_folder_is_green():
-    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма_1.jpeg"]))
+    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма 1.jpeg"]))
     assert colour == gui_status.SUCCESS
     assert "не обрабатывалась" in text
 
 
 def test_conflict_is_amber_with_reason():
-    text, colour = gui_status.initial_status(plan_for(["1.tif", "2.tif", "Рентгенограмма_1.jpeg"]))
+    text, colour = gui_status.initial_status(plan_for(["1.tif", "2.tif", "Рентгенограмма 1.jpeg"]))
     assert colour == gui_status.WARNING
     assert "не совпадает" in text
 
 
 def test_blocked_folder_is_red():
-    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма_1.jpeg.part"]))
+    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма 1.jpeg.part"]))
     assert colour == gui_status.ERROR
     assert "не может быть обработана" in text
 

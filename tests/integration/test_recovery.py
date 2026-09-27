@@ -61,8 +61,8 @@ def test_continue_finishes_the_work(tmp_path, monkeypatch):
     journal.close()
 
     assert result.complete
-    assert listing(folder) == ["ИСХ", "Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg"]
-    assert listing(plan.archive_dir) == ["Рентгенограмма_1.tif", "Рентгенограмма_2.tif"]
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
+    assert listing(plan.archive_dir) == ["Рентгенограмма 1.tif", "Рентгенограмма 2.tif"]
     after = {name: file_hash(os.path.join(plan.archive_dir, name)) for name in listing(plan.archive_dir)}
     assert sorted(after.values()) == sorted(before.values())
     assert analyse(record).situation == CONSISTENT
@@ -93,7 +93,7 @@ def test_finish_is_idempotent(tmp_path, monkeypatch):
 
 def test_finish_keeps_original_if_archive_copy_was_changed(tmp_path, monkeypatch):
     folder, plan, record, _, _ = interrupt_phase_b(tmp_path, monkeypatch, names=("1.tif",))
-    with open(os.path.join(plan.archive_dir, "Рентгенограмма_1.tif"), "ab") as stream:
+    with open(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"), "ab") as stream:
         stream.write("подмена".encode("utf-8"))
     journal = Journal(str(tmp_path / "recovery.jsonl"))
 
@@ -111,7 +111,7 @@ def test_leftover_part_files_are_reported(tmp_path, monkeypatch):
     finish(record, journal)
     journal.close()
     # Имитируем брошенный временный файл от прерванной фазы A.
-    open(safe_copy.part_path(os.path.join(folder, "Рентгенограмма_1.jpeg")), "wb").close()
+    open(safe_copy.part_path(os.path.join(folder, "Рентгенограмма 1.jpeg")), "wb").close()
 
     assert analyse(record).situation == PHASE_A_LEFTOVERS
 

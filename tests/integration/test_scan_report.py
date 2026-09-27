@@ -65,4 +65,4 @@ def test_json_report_contains_full_paths(tmp_path):
     assert folder["rule"] == "R3"
     assert folder["creates_archive_dir"] is True
     assert [os.path.basename(file["jpeg"]) for file in folder["files"]] == [
-        "Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg", "Рентгенограмма_3.jpeg"]
+        "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg", "Рентгенограмма 3.jpeg"]

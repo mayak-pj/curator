@@ -47,7 +47,7 @@ def test_processes_every_folder_and_writes_journal_and_log(tmp_path):
     assert len(summary.succeeded) == 2 and not summary.failed
     assert summary.files == 3
     assert listing(os.path.join(root, "Объект 001")) == [
-        "ИСХ", "Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg"]
+        "ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
     assert os.listdir(service.paths.journal) and os.listdir(service.paths.logs)
     kinds = [event["kind"] for event in events]
     for expected in (ev.SESSION_STARTED, ev.FOLDER_STARTED, ev.FOLDER_FINISHED,
@@ -183,7 +183,7 @@ def test_recovery_of_a_previous_session_is_offered(tmp_path, monkeypatch):
     result = second.recover(found[0][1], CONTINUE)
     second.close()
     assert result.complete
-    assert listing(folder) == ["ИСХ", "Рентгенограмма_1.jpeg"]
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg"]
 
 
 class _FakeRollback:

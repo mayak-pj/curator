@@ -69,12 +69,12 @@ def test_root_folder_is_processed_completely(vips, tmp_path):
 
     assert result.state == states.FOLDER_DONE
     assert [file.state for file in result.files] == [states.COMPLETED] * 3
-    assert listing(folder) == ["ИСХ", "Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg", "Рентгенограмма_3.jpeg"]
-    assert listing(plan.archive_dir) == ["Рентгенограмма_1.tif", "Рентгенограмма_2.tif", "Рентгенограмма_3.tif"]
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg", "Рентгенограмма 3.jpeg"]
+    assert listing(plan.archive_dir) == ["Рентгенограмма 1.tif", "Рентгенограмма 2.tif", "Рентгенограмма 3.tif"]
     # Оригиналы сохранены без изменений, порядок — натуральный.
-    assert file_hash(os.path.join(plan.archive_dir, "Рентгенограмма_1.tif")) == originals["снимок 1.tif"]
-    assert file_hash(os.path.join(plan.archive_dir, "Рентгенограмма_3.tif")) == originals["снимок 10.tif"]
-    assert vips.Image.new_from_file(os.path.join(folder, "Рентгенограмма_1.jpeg")).width == WIDTH
+    assert file_hash(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif")) == originals["снимок 1.tif"]
+    assert file_hash(os.path.join(plan.archive_dir, "Рентгенограмма 3.tif")) == originals["снимок 10.tif"]
+    assert vips.Image.new_from_file(os.path.join(folder, "Рентгенограмма 1.jpeg")).width == WIDTH
 
 
 def test_network_steps_report_progress_between_files(vips, tmp_path):
@@ -98,14 +98,14 @@ def test_archive_folder_keeps_originals_and_puts_jpegs_one_level_up(vips, tmp_pa
     result, plan, _ = run_folder(folder, tmp_path)
 
     assert result.state == states.FOLDER_DONE
-    assert listing(folder) == ["ИСХ", "Рентгенограмма_1.jpeg", "Рентгенограмма_2.jpeg"]
-    assert listing(archive) == ["Рентгенограмма_1.tif", "Рентгенограмма_2.tif"]
-    assert file_hash(os.path.join(archive, "Рентгенограмма_1.tif")) == originals["1.tiff"]
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
+    assert listing(archive) == ["Рентгенограмма 1.tif", "Рентгенограмма 2.tif"]
+    assert file_hash(os.path.join(archive, "Рентгенограмма 1.tif")) == originals["1.tiff"]
 
 
 def test_rename_inside_archive_does_not_overwrite_neighbour(tmp_path):
     # Имя второго файла займёт имя, которое должен получить первый.
-    folder = make_folder(tmp_path, ["Рентгенограмма_2.tif", "снимок.tif"], in_archive=True)
+    folder = make_folder(tmp_path, ["Рентгенограмма 2.tif", "снимок.tif"], in_archive=True)
     archive = os.path.join(folder, "ИСХ")
     before = {name: file_hash(os.path.join(archive, name)) for name in listing(archive)}
 
@@ -113,7 +113,7 @@ def test_rename_inside_archive_does_not_overwrite_neighbour(tmp_path):
 
     assert plan.two_step_renames
     assert result.state == states.FOLDER_DONE
-    assert listing(archive) == ["Рентгенограмма_1.tif", "Рентгенограмма_2.tif"]
+    assert listing(archive) == ["Рентгенограмма 1.tif", "Рентгенограмма 2.tif"]
     after = {name: file_hash(os.path.join(archive, name)) for name in listing(archive)}
     assert sorted(after.values()) == sorted(before.values())  # ни один снимок не потерян
 
@@ -233,7 +233,7 @@ def test_original_changed_during_processing_is_not_deleted(tmp_path, monkeypatch
 
     assert result.state == states.FOLDER_ROLLBACK_REQUIRED
     assert os.path.exists(os.path.join(folder, "1.tif"))  # оригинал на месте
-    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма_1.tif"))  # копия сделана
+    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"))  # копия сделана
     assert "IntegrityError" in result.error
 
 
