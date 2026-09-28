@@ -119,11 +119,6 @@ class MainWindow:
         root = self._selected_root()
         if not root:
             return
-        if not messagebox.askyesno(
-                "Начать обработку",
-                "Будут созданы JPEG, а оригиналы перенесены в подпапку ИСХ.\n\n"
-                "Любую папку можно вернуть кнопкой «Откатить».\n\nПродолжить?"):
-            return
         self.errors.clear()
         self.processed_folders = []
         self._busy("Обработка…")
