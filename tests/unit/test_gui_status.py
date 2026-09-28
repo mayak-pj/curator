@@ -37,7 +37,7 @@ def test_conflict_is_amber_with_reason():
 
 
 def test_blocked_folder_is_red():
-    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма 1.jpeg.part"]))
+    text, colour = gui_status.initial_status(plan_for(["1.tif", "Рентгенограмма.jpeg.part"]))
     assert colour == gui_status.ERROR
     assert "не может быть обработана" in text
 

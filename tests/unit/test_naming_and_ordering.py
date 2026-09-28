@@ -7,13 +7,20 @@ naming = XrayNaming()
 
 
 def test_generated_names():
-    assert naming.jpeg_name(1) == "Рентгенограмма 1.jpeg"
-    assert naming.source_name(12) == "Рентгенограмма 12.tif"
+    assert naming.jpeg_name(1, total=3) == "Рентгенограмма 1.jpeg"
+    assert naming.source_name(12, total=12) == "Рентгенограмма 12.tif"
     assert naming.archive_dir_name() == "ИСХ"
+
+
+def test_single_file_folder_gets_no_number():
+    # my_reports, 28.09.2026: единственный снимок в папке не нумеруется.
+    assert naming.jpeg_name(1, total=1) == "Рентгенограмма.jpeg"
+    assert naming.source_name(1, total=1) == "Рентгенограмма.tif"
 
 
 @pytest.mark.parametrize("filename", [
     "Рентгенограмма 1.jpeg",
+    "Рентгенограмма.jpeg",       # единственный снимок в папке, без номера
     "Рентгенограмма 1.jpeg",     # как называл человек раньше
     "рентгенограмма-3.jpg",
     "РЕНТГЕНОГРАММА_5.JPEG",

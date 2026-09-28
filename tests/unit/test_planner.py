@@ -39,7 +39,7 @@ def test_new_archive_dir_is_uppercase():
 
 def test_tiff_extension_is_normalised():
     plan = make_plan(["снимок.TIFF"])
-    assert names(plan, "archive") == ["Рентгенограмма 1.tif"]
+    assert names(plan, "archive") == ["Рентгенограмма.tif"]
 
 
 def test_jpegs_go_next_to_archive_not_into_it():
@@ -69,7 +69,7 @@ def test_existing_target_jpeg_blocks_folder():
 
 
 def test_leftover_part_file_is_a_problem():
-    plan = make_plan(["1.tif", "Рентгенограмма 1.jpeg.part"])
+    plan = make_plan(["1.tif", "Рентгенограмма.jpeg.part"])
     assert any("временный файл" in problem for problem in plan.problems)
     assert not plan.ok
 
@@ -84,7 +84,7 @@ def test_tiffs_in_folder_and_archive_are_a_conflict():
 def test_occupied_name_in_archive_is_a_problem():
     # Защита планировщика: решение приходит извне, а целевое имя в архиве занято.
     snapshot = FolderSnapshot(path=FOLDER, files=("1.tif",), archive_dir="ИСХ",
-                              archive_files=("Рентгенограмма 1.tif",))
+                              archive_files=("Рентгенограмма.tif",))
     decision = FolderDecision(PROCESS_ROOT, "R3", "передано вручную")
     plan = plan_folder(snapshot, decision, naming)
     assert any("в архиве уже есть" in problem for problem in plan.problems)

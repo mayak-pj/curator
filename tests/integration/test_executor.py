@@ -233,7 +233,7 @@ def test_original_changed_during_processing_is_not_deleted(tmp_path, monkeypatch
 
     assert result.state == states.FOLDER_ROLLBACK_REQUIRED
     assert os.path.exists(os.path.join(folder, "1.tif"))  # оригинал на месте
-    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"))  # копия сделана
+    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма.tif"))  # копия сделана
     assert "IntegrityError" in result.error
 
 

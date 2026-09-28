@@ -28,6 +28,13 @@ HASHES_FILE = "hashes.json"
 WIDTH, HEIGHT = 800, 600
 
 
+def _expected_names(names, extension):
+    # Единственный снимок в папке — без номера (domain/naming.py, D17).
+    if len(names) == 1:
+        return ["Рентгенограмма{}".format(extension)]
+    return ["Рентгенограмма {}{}".format(number, extension) for number in range(1, len(names) + 1)]
+
+
 def create(root):
     vips = load_pyvips()
     if os.path.isdir(root):
@@ -68,14 +75,14 @@ def check(root, state):
             continue
 
         jpegs = sorted(name for name in os.listdir(folder) if name.lower().endswith(".jpeg"))
-        expected = ["Рентгенограмма {}.jpeg".format(number) for number in range(1, len(names) + 1)]
+        expected = sorted(_expected_names(names, ".jpeg"))
         if jpegs != sorted(expected):
             problems.append("{}: JPEG {} вместо {}".format(folder, jpegs, sorted(expected)))
         if not os.path.isdir(archive):
             problems.append("{}: нет папки ИСХ".format(folder))
             continue
         archived = sorted(os.listdir(archive))
-        expected_tiffs = sorted("Рентгенограмма {}.tif".format(number) for number in range(1, len(names) + 1))
+        expected_tiffs = sorted(_expected_names(names, ".tif"))
         if archived != expected_tiffs:
             problems.append("{}: в ИСХ {} вместо {}".format(folder, archived, expected_tiffs))
         stored = {_hash(os.path.join(archive, name)) for name in archived}

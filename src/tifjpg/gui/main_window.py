@@ -184,7 +184,10 @@ class MainWindow:
         elif kind == ev.FOLDER_SKIPPED:
             self.folders.set_status(event["folder"], "пропущена: занята другим пользователем", "warning")
             self.errors.add(event["reason"], "warning", event["folder"])
-        elif kind == ev.FILE_COMPLETED:
+        elif kind == ev.FILE_PREPARED:
+            # Фаза A (чтение, конвертация, копирование в архив) занимает почти
+            # всё время файла; "file_completed" из фазы B приходит пачкой в
+            # конце папки и раньше давал полосе прогресса дёргаться скачками.
             self.done_files += 1
             self._update_progress()
         elif kind == ev.PROGRESS and event.get("stage") in ("histogram", "encode"):

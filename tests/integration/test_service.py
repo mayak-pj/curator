@@ -183,7 +183,7 @@ def test_recovery_of_a_previous_session_is_offered(tmp_path, monkeypatch):
     result = second.recover(found[0][1], CONTINUE)
     second.close()
     assert result.complete
-    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg"]
+    assert listing(folder) == ["ИСХ", "Рентгенограмма.jpeg"]
 
 
 class _FakeRollback:

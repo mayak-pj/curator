@@ -5,6 +5,9 @@
 `рентгенограмма-1.jpeg` и т. п. Поэтому признак «наш результат» —
 вхождение слова, а не точный шаблон (решение D15).
 
+Если в папке всего один снимок, номер не нужен: результат — просто
+`Рентгенограмма.jpeg` (решение D17).
+
 Другая схема именования = другая реализация NamingScheme, выбирается в
 config.json.
 """
@@ -21,11 +24,11 @@ class NamingScheme(ABC):
         """Имя создаваемой папки архива."""
 
     @abstractmethod
-    def jpeg_name(self, index):
-        """Имя JPEG для порядкового номера index (с 1)."""
+    def jpeg_name(self, index, total):
+        """Имя JPEG для порядкового номера index (с 1) из total файлов в папке."""
 
     @abstractmethod
-    def source_name(self, index):
+    def source_name(self, index, total):
         """Имя оригинала в папке архива."""
 
     @abstractmethod
@@ -43,11 +46,16 @@ class XrayNaming(NamingScheme):
     def archive_dir_name(self):
         return self.archive_dir
 
-    def jpeg_name(self, index):
-        return "{} {}{}".format(self.prefix, index, self.jpeg_extension)
+    def jpeg_name(self, index, total):
+        return self._name(index, total, self.jpeg_extension)
 
-    def source_name(self, index):
-        return "{} {}{}".format(self.prefix, index, self.source_extension)
+    def source_name(self, index, total):
+        return self._name(index, total, self.source_extension)
+
+    def _name(self, index, total, extension):
+        if total == 1:
+            return "{}{}".format(self.prefix, extension)
+        return "{} {}{}".format(self.prefix, index, extension)
 
     def is_processed_jpeg(self, filename):
         stem, extension = os.path.splitext(filename)

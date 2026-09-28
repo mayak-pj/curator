@@ -95,6 +95,10 @@ class FolderList(ttk.Frame):
             relative = os.path.relpath(folder, self._root)
         except ValueError:
             return folder
+        if relative in (".", ""):
+            # Выбранная корневая папка сама является обрабатываемой папкой:
+            # относительный путь до самой себя — "." (не название для человека).
+            return os.path.basename(os.path.normpath(folder)) or folder
         return folder if relative.startswith("..") else relative
 
     def _rollback(self, folder):

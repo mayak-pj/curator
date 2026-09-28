@@ -55,7 +55,7 @@ def test_rollback_restores_names_inside_archive(tmp_path):
 
 def test_modified_jpeg_is_never_deleted(tmp_path):
     folder, plan, record, before = process_and_record(tmp_path, ["1.tif"])
-    edited = os.path.join(folder, "Рентгенограмма 1.jpeg")
+    edited = os.path.join(folder, "Рентгенограмма.jpeg")
     with open(edited, "ab") as stream:  # пользователь что-то дописал в файл
         stream.write("правка пользователя".encode("utf-8"))
 
@@ -70,27 +70,27 @@ def test_modified_jpeg_is_never_deleted(tmp_path):
 def test_missing_archive_copy_keeps_the_jpeg(tmp_path):
     """Если оригинал восстановить нечем, JPEG — единственная копия снимка."""
     folder, plan, record, _ = process_and_record(tmp_path, ["1.tif"])
-    os.remove(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"))
+    os.remove(os.path.join(plan.archive_dir, "Рентгенограмма.tif"))
 
     result = rollback(record, tmp_path)
 
     assert result.state == PARTIAL
-    assert os.path.exists(os.path.join(folder, "Рентгенограмма 1.jpeg"))
+    assert os.path.exists(os.path.join(folder, "Рентгенограмма.jpeg"))
     assert any("восстановить нечем" in warning for warning in result.warnings)
     assert any("JPEG оставлен" in warning for warning in result.warnings)
 
 
 def test_modified_archive_copy_is_not_used(tmp_path):
     folder, plan, record, _ = process_and_record(tmp_path, ["1.tif"])
-    with open(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"), "ab") as stream:
+    with open(os.path.join(plan.archive_dir, "Рентгенограмма.tif"), "ab") as stream:
         stream.write("подмена".encode("utf-8"))
 
     result = rollback(record, tmp_path)
 
     assert result.state == PARTIAL
     assert any("изменена" in warning for warning in result.warnings)
-    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма 1.tif"))
-    assert os.path.exists(os.path.join(folder, "Рентгенограмма 1.jpeg"))
+    assert os.path.exists(os.path.join(plan.archive_dir, "Рентгенограмма.tif"))
+    assert os.path.exists(os.path.join(folder, "Рентгенограмма.jpeg"))
 
 
 def test_rollback_after_failed_phase_a_has_nothing_to_do(tmp_path, monkeypatch):

@@ -25,14 +25,15 @@ def plan_folder(snapshot, decision, naming, max_path=MAX_PATH):
     archive_path = snapshot.archive_path(naming)
     sources = natural_sorted(snapshot.archive_tiffs() if from_archive else snapshot.tiffs())
 
+    total = len(sources)
     files = []
     for index, name in enumerate(sources, start=1):
         source_dir = archive_path if from_archive else snapshot.path
         files.append(PlannedFile(
             index=index,
             source=os.path.join(source_dir, name),
-            jpeg=os.path.join(snapshot.path, naming.jpeg_name(index)),
-            archive=os.path.join(archive_path, naming.source_name(index)),
+            jpeg=os.path.join(snapshot.path, naming.jpeg_name(index, total)),
+            archive=os.path.join(archive_path, naming.source_name(index, total)),
             source_in_archive=from_archive,
         ))
 
