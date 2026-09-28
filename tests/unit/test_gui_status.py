@@ -83,3 +83,35 @@ def test_summary_line_counts_everything():
     assert "Обработано файлов 3" in line
     assert "успешно 1" in line and "с ошибками 1" in line
     assert "уже готовых 2" in line and "конфликтов 1" in line and "занято другими 1" in line
+
+
+def test_folder_progress_shows_file_count():
+    text, colour = gui_status.folder_progress(2, 4)
+    assert text == "обрабатывается: файл 2 из 4"
+    assert colour == gui_status.RUNNING
+
+
+@pytest.mark.parametrize("seconds, expected", [
+    (0, "0 с"),
+    (45, "45 с"),
+    (90, "1 мин"),
+    (3661, "1 ч 1 мин"),
+])
+def test_format_duration(seconds, expected):
+    assert gui_status.format_duration(seconds) == expected
+
+
+def test_progress_line_before_any_file_has_no_estimate():
+    line = gui_status.progress_line(0, 10, elapsed_seconds=5)
+    assert line == "Готово файлов: 0 из 10 · 0 %"
+
+
+def test_progress_line_estimates_remaining_time_from_average_pace():
+    # 2 из 10 готово за 20 с -> по 10 с на файл -> на оставшиеся 8 файлов ~80 с.
+    line = gui_status.progress_line(2, 10, elapsed_seconds=20)
+    assert line == "Готово файлов: 2 из 10 · 20 % · осталось ~1 мин"
+
+
+def test_progress_line_has_no_estimate_once_finished():
+    line = gui_status.progress_line(10, 10, elapsed_seconds=100)
+    assert line == "Готово файлов: 10 из 10 · 100 %"

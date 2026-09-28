@@ -26,7 +26,7 @@ class RecoveryDialog(tk.Toplevel):
         self.title("Обнаружена незавершённая операция")
         self.transient(master)
         self.resizable(True, False)
-        self.configure(background=theme.BACKGROUND)
+        self.configure(background=theme.background())
         self.decisions = []
 
         frame = ttk.Frame(self, padding=12)

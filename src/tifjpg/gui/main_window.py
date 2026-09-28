@@ -4,8 +4,10 @@
 идёт в фоновом потоке, поэтому интерфейс не замирает на больших снимках.
 """
 
+import json
 import os
 import sys
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
@@ -28,13 +30,38 @@ NETWORK_STEP_LABELS = {
 }
 
 
+class _Lightbulb(tk.Canvas):
+    """Переключатель темы: горит — светлая, погасла — тёмная.
+
+    Рисуем сами, а не берём эмодзи-символ лампочки: у обычных шрифтов
+    Windows 7 нет цветных эмодзи, вместо значка был бы квадратик-заглушка.
+    """
+
+    SIZE = 22
+
+    def __init__(self, master, command):
+        super().__init__(master, width=self.SIZE, height=self.SIZE, highlightthickness=0, cursor="hand2")
+        self._command = command
+        self.bind("<Button-1>", lambda _event: self._command())
+
+    def set_lit(self, lit):
+        self.configure(background=theme.background())
+        self.delete("all")
+        cx, top, r = self.SIZE // 2, 3, 6
+        if lit:
+            fill, outline = "#f2c94c", "#c9971f"
+        else:
+            fill, outline = theme.background(), theme.muted()
+        self.create_oval(cx - r, top, cx + r, top + 2 * r, fill=fill, outline=outline)
+        self.create_rectangle(cx - 3, top + 2 * r - 1, cx + 3, top + 2 * r + 3, fill=outline, outline=outline)
+
+
 class MainWindow:
     def __init__(self, service=None):
         self.root = tk.Tk()
         self.root.title("TifJpg {} — конвертер рентгенограмм".format(__version__))
         self.root.geometry("1000x720")
         self.root.minsize(780, 560)
-        theme.apply(self.root)
 
         self.worker = Worker(lambda delay, callback: self.root.after(delay, callback), self._handle_event)
         self.service = service or ProcessingService(on_event=self.worker.post)
@@ -43,8 +70,19 @@ class MainWindow:
         self.total_files = 0
         self.done_files = 0
         self.processed_folders = []
+        self._current_folder = None
+        self._current_folder_files = 0
+        self._session_started_at = 0.0
+
+        gui_state = self._load_gui_state()
+        theme.apply(self.root, dark=bool(gui_state.get("dark")))
 
         self._build()
+        last_root = gui_state.get("last_root")
+        if last_root:
+            self.root_var.set(last_root)
+            self.current_var.set("Загружена последняя папка. «Проверить» покажет план, ничего не меняя.")
+
         self.worker.start_polling()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(400, self._check_recovery)
@@ -57,6 +95,9 @@ class MainWindow:
 
         chooser = ttk.Frame(outer)
         chooser.pack(fill="x")
+        self._lightbulb = _Lightbulb(chooser, command=self._toggle_theme)
+        self._lightbulb.pack(side="right", padx=(8, 0))
+        self._lightbulb.set_lit(not theme.is_dark())
         ttk.Label(chooser, text="Корневая папка:").pack(side="left")
         self.root_var = tk.StringVar()
         entry = ttk.Entry(chooser, textvariable=self.root_var)
@@ -171,6 +212,8 @@ class MainWindow:
         elif kind == ev.SESSION_STARTED:
             self._on_session_started(event)
         elif kind == ev.FOLDER_STARTED:
+            self._current_folder = event["folder"]
+            self._current_folder_files = event["files"]
             self.folders.set_status(event["folder"], *status_module.folder_status("running"))
             self.folders.show(event["folder"])
             self.current_var.set("Папка: {} ({} файлов)".format(event["folder"], event["files"]))
@@ -185,6 +228,9 @@ class MainWindow:
             # конце папки и раньше давал полосе прогресса дёргаться скачками.
             self.done_files += 1
             self._update_progress()
+            if event.get("folder") == self._current_folder and self._current_folder_files:
+                self.folders.set_status(self._current_folder, *status_module.folder_progress(
+                    event.get("index", 0), self._current_folder_files))
         elif kind == ev.PROGRESS and event.get("stage") in ("histogram", "encode"):
             self.status_var.set("Файл #{}: {} {:.0f} %".format(
                 event.get("index", "?"), event["stage"], event.get("fraction", 0) * 100))
@@ -219,6 +265,7 @@ class MainWindow:
     def _on_session_started(self, event):
         self.total_files = max(event.get("files", 0), 1)
         self.done_files = 0
+        self._session_started_at = time.monotonic()
         self.progress.configure(maximum=self.total_files, value=0)
 
     def _on_folder_finished(self, event):
@@ -297,7 +344,34 @@ class MainWindow:
         if not root or not os.path.isdir(root):
             messagebox.showwarning("Папка не выбрана", "Сначала выберите существующую корневую папку.")
             return None
+        self._save_gui_state(last_root=root)
         return root
+
+    def _toggle_theme(self):
+        dark = not theme.is_dark()
+        theme.apply(self.root, dark=dark)
+        self.folders.refresh_theme()
+        self.errors.refresh_theme()
+        self._lightbulb.set_lit(not dark)
+        self._save_gui_state(dark=dark)
+
+    def _load_gui_state(self):
+        try:
+            with open(self.service.paths.gui_state, encoding="utf-8") as stream:
+                data = json.load(stream)
+        except (OSError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save_gui_state(self, **changes):
+        # Последняя папка и тема — удобство, а не данные: не страшно, если не сохранится.
+        state = self._load_gui_state()
+        state.update(changes)
+        try:
+            with open(self.service.paths.gui_state, "w", encoding="utf-8") as stream:
+                json.dump(state, stream, ensure_ascii=False)
+        except OSError:
+            pass
 
     def _busy(self, message):
         self.status_var.set(message)
@@ -314,7 +388,8 @@ class MainWindow:
 
     def _update_progress(self):
         self.progress.configure(value=min(self.done_files, self.total_files))
-        self.status_var.set("Готово файлов: {} из {}".format(self.done_files, self.total_files))
+        elapsed = time.monotonic() - self._session_started_at
+        self.status_var.set(status_module.progress_line(self.done_files, self.total_files, elapsed))
 
     def _on_close(self):
         if self.worker.busy:

@@ -34,6 +34,11 @@ def initial_status(plan):
     return WAITING
 
 
+def folder_progress(done, total):
+    """Строка статуса папки, пока она обрабатывается: «файл N из M»."""
+    return ("обрабатывается: файл {} из {}".format(done, total), RUNNING)
+
+
 def folder_status(state, error=None, rolled_back=False):
     """Строка списка после обработки папки."""
     if state == states.FOLDER_DONE:
@@ -79,3 +84,31 @@ def summary_line(summary):
         parts.append("остановлено пользователем")
     return "Обработано файлов {} · {} · за {:.0f} с".format(
         summary.files, ", ".join(parts), summary.seconds)
+
+
+def progress_line(done, total, elapsed_seconds):
+    """Строка над списком папок во время обработки: доля и оценка остатка."""
+    percent = int(100 * done / total) if total else 0
+    line = "Готово файлов: {} из {} · {} %".format(done, total, percent)
+    remaining = _estimate_remaining(done, total, elapsed_seconds)
+    if remaining is not None:
+        line += " · осталось ~{}".format(format_duration(remaining))
+    return line
+
+
+def _estimate_remaining(done, total, elapsed_seconds):
+    """Оценка по среднему темпу — доступна не раньше первого готового файла."""
+    if done <= 0 or done >= total:
+        return None
+    return (elapsed_seconds / done) * (total - done)
+
+
+def format_duration(seconds):
+    seconds = max(0, int(seconds))
+    if seconds < 60:
+        return "{} с".format(seconds)
+    minutes = seconds // 60
+    if minutes < 60:
+        return "{} мин".format(minutes)
+    hours, minutes = divmod(minutes, 60)
+    return "{} ч {} мин".format(hours, minutes)

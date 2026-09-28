@@ -14,8 +14,8 @@ class FolderList(ttk.Frame):
         self._rows = {}
         self._root = ""
 
-        self._canvas = tk.Canvas(self, background=theme.SURFACE, highlightthickness=1,
-                                 highlightbackground=theme.BORDER, height=220)
+        self._canvas = tk.Canvas(self, background=theme.surface(), highlightthickness=1,
+                                 highlightbackground=theme.border(), height=220)
         scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._canvas.yview)
         self._canvas.configure(yscrollcommand=scrollbar.set)
         self._canvas.pack(side="left", fill="both", expand=True)
@@ -37,6 +37,12 @@ class FolderList(ttk.Frame):
             row.destroy()
         self._rows = {}
 
+    def refresh_theme(self):
+        """Canvas и полоски строк — не ttk, при смене темы их красим вручную."""
+        self._canvas.configure(background=theme.surface(), highlightbackground=theme.border())
+        for row in self._rows.values():
+            self._set_running(row, row["running"])
+
     def set_folders(self, plans, root, status_of):
         self.clear()
         self._root = root
@@ -51,6 +57,7 @@ class FolderList(ttk.Frame):
             self._add_row(folder, text, colour)
             return
         row["status"].configure(text=text, style="{}.Surface.TLabel".format(colour))
+        self._set_running(row, colour == "running")
 
     def set_rollback_enabled(self, folder, enabled):
         row = self._rows.get(folder)
@@ -75,20 +82,31 @@ class FolderList(ttk.Frame):
     def _add_row(self, folder, text, colour):
         frame = ttk.Frame(self._inner, style="Surface.TFrame", padding=(8, 3))
         frame.pack(fill="x")
-        frame.columnconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+
+        # Полоска слева: цветом отмечает папку, которая обрабатывается прямо
+        # сейчас — так её видно, даже не читая текст статуса.
+        indicator = tk.Frame(frame, width=4, background=theme.surface())
+        indicator.grid(row=0, column=0, rowspan=2, sticky="ns", padx=(0, 8))
 
         name = ttk.Label(frame, text=self._display_name(folder), style="Surface.TLabel",
                          font=theme.FONT_BOLD, anchor="w")
-        name.grid(row=0, column=0, sticky="we")
+        name.grid(row=0, column=1, sticky="we")
         status = ttk.Label(frame, text=text, style="{}.Surface.TLabel".format(colour), anchor="w")
-        status.grid(row=1, column=0, sticky="we")
+        status.grid(row=1, column=1, sticky="we")
         button = ttk.Button(frame, text="Откатить", width=11, state="disabled",
                             command=lambda path=folder: self._rollback(path))
-        button.grid(row=0, column=1, rowspan=2, sticky="e", padx=(8, 0))
+        button.grid(row=0, column=2, rowspan=2, sticky="e", padx=(8, 0))
 
         separator = ttk.Separator(self._inner, orient="horizontal")
         separator.pack(fill="x")
-        self._rows[folder] = {"frame": frame, "status": status, "button": button}
+        row = {"frame": frame, "status": status, "button": button, "indicator": indicator, "running": False}
+        self._rows[folder] = row
+        self._set_running(row, colour == "running")
+
+    def _set_running(self, row, running):
+        row["running"] = running
+        row["indicator"].configure(background=theme.colour("running") if running else theme.surface())
 
     def _display_name(self, folder):
         try:

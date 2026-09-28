@@ -13,19 +13,23 @@ class ErrorPanel(ttk.Labelframe):
         self._count = 0
 
         self._text = tk.Text(self, height=7, wrap="word", font=theme.FONT_MONO,
-                             background=theme.SURFACE, foreground=theme.TEXT,
                              relief="solid", borderwidth=1, highlightthickness=0)
         scrollbar = ttk.Scrollbar(self, orient="vertical", command=self._text.yview)
         self._text.configure(yscrollcommand=scrollbar.set, state="disabled")
         self._text.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
 
-        self._text.tag_configure("error", foreground=theme.colour("error"))
-        self._text.tag_configure("warning", foreground=theme.colour("warning"))
+        self.refresh_theme()
 
     @property
     def count(self):
         return self._count
+
+    def refresh_theme(self):
+        """Text — не ttk, цвета за сменой темы сами не следуют."""
+        self._text.configure(background=theme.surface(), foreground=theme.text())
+        self._text.tag_configure("error", foreground=theme.colour("error"))
+        self._text.tag_configure("warning", foreground=theme.colour("warning"))
 
     def add(self, message, level="warning", folder=None):
         self._count += 1

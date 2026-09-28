@@ -14,6 +14,7 @@ JOURNAL_DIR = "journal"
 LOGS_DIR = "logs"
 LOCKS_DIR = "locks"
 CONFIG_NAME = "config.json"
+GUI_STATE_NAME = "gui_state.json"
 
 
 def app_dir():
@@ -43,6 +44,11 @@ class AppPaths:
     @property
     def config(self):
         return os.path.join(self.base, CONFIG_NAME)
+
+    @property
+    def gui_state(self):
+        """Последняя папка и тема окна — удобство, а не журнал: сохраняется best-effort."""
+        return os.path.join(self.base, GUI_STATE_NAME)
 
     @property
     def temp(self):
