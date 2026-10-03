@@ -101,17 +101,23 @@ def test_format_duration(seconds, expected):
     assert gui_status.format_duration(seconds) == expected
 
 
-def test_progress_line_before_any_file_has_no_estimate():
-    line = gui_status.progress_line(0, 10, elapsed_seconds=5)
+def test_progress_line_before_any_progress_has_no_estimate():
+    line = gui_status.progress_line(0, 10, fraction=0.0, elapsed_seconds=5)
     assert line == "Готово файлов: 0 из 10 · 0 %"
 
 
 def test_progress_line_estimates_remaining_time_from_average_pace():
-    # 2 из 10 готово за 20 с -> по 10 с на файл -> на оставшиеся 8 файлов ~80 с.
-    line = gui_status.progress_line(2, 10, elapsed_seconds=20)
+    # 20 % готово за 20 с -> на всё уйдёт ~100 с -> осталось ~80 с.
+    line = gui_status.progress_line(2, 10, fraction=0.2, elapsed_seconds=20)
     assert line == "Готово файлов: 2 из 10 · 20 % · осталось ~1 мин"
 
 
+def test_progress_line_reflects_progress_within_the_current_file():
+    # 2 файла готовы + текущий сделан наполовину из 10 -> 25 %, а не 20 %.
+    line = gui_status.progress_line(2, 10, fraction=0.25, elapsed_seconds=20)
+    assert "25 %" in line
+
+
 def test_progress_line_has_no_estimate_once_finished():
-    line = gui_status.progress_line(10, 10, elapsed_seconds=100)
+    line = gui_status.progress_line(10, 10, fraction=1.0, elapsed_seconds=100)
     assert line == "Готово файлов: 10 из 10 · 100 %"

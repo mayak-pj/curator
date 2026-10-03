@@ -72,11 +72,17 @@ def apply(root, dark=False):
     style.configure("Muted.TLabel", foreground=p["muted"])
     style.configure("Heading.TLabel", font=FONT_BOLD)
     style.configure("TButton", padding=(10, 4), background=p["surface"], foreground=p["text"])
-    style.map("TButton", background=[("active", p["border"]), ("disabled", p["background"])])
+    style.map("TButton",
+             background=[("active", p["border"]), ("disabled", p["background"])],
+             foreground=[("disabled", p["muted"])])
     style.configure("TEntry", fieldbackground=p["surface"], foreground=p["text"])
     style.configure("TLabelframe", background=p["background"])
     style.configure("TLabelframe.Label", background=p["background"], foreground=p["muted"])
-    style.configure("Horizontal.TProgressbar", background=p["colours"]["running"])
+    # thickness/troughcolor под "vista" не действуют (нативный хром), это
+    # только для тёмной темы на "clam" — там полоса иначе выходила тоньше
+    # и терялась на фоне (my_reports, 01.10.2026).
+    style.configure("Horizontal.TProgressbar", background=p["colours"]["success"],
+                    troughcolor=p["surface"], borderwidth=0, thickness=20)
     for key, value in p["colours"].items():
         style.configure("{}.Surface.TLabel".format(key), background=p["surface"], foreground=value)
     return style

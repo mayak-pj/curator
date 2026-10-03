@@ -78,16 +78,38 @@ def test_root_folder_is_processed_completely(vips, tmp_path):
 
 
 def test_network_steps_report_progress_between_files(vips, tmp_path):
-    # my_reports, этап 9: без этого сигнала статус в окне часами не менялся,
+    # my_reports, этапы 9-10: без явного сигнала статус в окне часами не менялся,
     # пока файл копировался по сети, и выглядело так, будто программа зависла.
     folder = make_folder(tmp_path, ["1.tif"])
     events = []
 
     run_folder(folder, tmp_path, on_event=events.append)
 
-    stages = [event["stage"] for event in events
-              if event["kind"] == "progress" and event.get("fraction") is None]
-    assert stages == [states.STAGED, states.JPEG_UPLOADED, states.SOURCE_COPIED]
+    started = [event for event in events if event["kind"] == "file_started"]
+    assert [event["index"] for event in started] == [1]
+
+    network_stages = {states.STAGED, states.JPEG_UPLOADED, states.SOURCE_COPIED}
+    progress = [event for event in events
+               if event["kind"] == "progress" and event.get("stage") in network_stages]
+    assert {event["stage"] for event in progress} == network_stages
+    # Тестовый файл маленький (один чанк), поэтому доля сразу доходит до конца.
+    assert all(event["fraction"] == 1.0 for event in progress)
+
+
+def test_network_step_progress_climbs_in_small_steps_for_a_multi_chunk_file(vips, tmp_path):
+    # Маленький chunk_size имитирует большой файл: несколько чанков на шаг,
+    # чтобы проверить, что доля растёт постепенно, а не одним скачком до 1.0.
+    folder = make_folder(tmp_path, ["1.tif"])
+    events = []
+
+    run_folder(folder, tmp_path, on_event=events.append, chunk_size=256)
+
+    staged = [event["fraction"] for event in events
+             if event["kind"] == "progress" and event.get("stage") == states.STAGED]
+    assert len(staged) > 2
+    assert staged == sorted(staged)
+    assert staged[-1] == 1.0
+    assert staged[0] < 1.0
 
 
 def test_archive_folder_keeps_originals_and_puts_jpegs_one_level_up(vips, tmp_path):

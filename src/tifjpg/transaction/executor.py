@@ -28,12 +28,11 @@ JPEG_SIZE_FACTOR = 0.5
 TEMP_PREFIX = "tifjpg-"
 RENAME_SUFFIX = ".rename.part"
 
-# Шаги, где файл целиком идёт по сети (чтение оригинала, запись JPEG,
-# копирование оригинала в архив) — единственные, о начале которых стоит
-# сообщать в интерфейс отдельно (ARCHITECTURE.md не хватает байтового
-# прогресса copy_with_hash/copy_verified, а без этого сигнала статус
-# "encode 100%" от предыдущего файла висит всё время, пока идёт копирование).
-NETWORK_STEP_STATES = (states.STAGED, states.JPEG_UPLOADED, states.SOURCE_COPIED)
+# Минимальный шаг между событиями "progress" по сетевым шагам: байтовый
+# коллбек copy_with_hash/copy_verified зовётся на каждый чанк (по умолчанию
+# 1 МБ), и без фильтра на файл в сотню МБ ушли бы сотни событий в очередь
+# GUI — заметно на больших сессиях, а полосе хватает и более редких шагов.
+PROGRESS_STEP = 0.02
 
 
 @dataclass(frozen=True)
@@ -119,6 +118,7 @@ class FolderExecutor:
     def _phase_a(self, plan, result, temp_dir):
         for planned in plan.files:
             self._raise_if_cancelled(planned.source)
+            self._emit("file_started", folder=plan.folder, index=planned.index)
             file_result = FileResult(index=planned.index, source=planned.source,
                                      jpeg=planned.jpeg, archive=planned.archive)
             result.files.append(file_result)
@@ -134,8 +134,9 @@ class FolderExecutor:
 
             def download():
                 safe_copy.remove_quietly(stage)
+                on_bytes = self._byte_progress(states.STAGED, planned.index, file_result.signature["size"])
                 return copy_with_hash(planned.source, stage, chunk_size=self.options.chunk_size,
-                                      is_cancelled=self._is_cancelled)
+                                      on_bytes=on_bytes, is_cancelled=self._is_cancelled)
 
             _, source_hash = self._step(file_result, states.STAGED,
                                         lambda: self._retry(download, "чтение оригинала"),
@@ -157,8 +158,10 @@ class FolderExecutor:
                                                after=lambda value: {"jpeg_hash": value})
 
             def upload_jpeg():
+                on_bytes = self._byte_progress(states.JPEG_UPLOADED, planned.index,
+                                               os.path.getsize(local_jpeg))
                 _, digest = safe_copy.copy_verified(local_jpeg, planned.jpeg, chunk_size=self.options.chunk_size,
-                                                    is_cancelled=self._is_cancelled)
+                                                    on_bytes=on_bytes, is_cancelled=self._is_cancelled)
                 if digest != file_result.jpeg_hash:
                     raise IntegrityError(planned.jpeg, "выгруженный JPEG отличается от локального")
                 return digest
@@ -172,9 +175,11 @@ class FolderExecutor:
                 self._step(file_result, states.SOURCE_COPIED, None, note="оригинал уже в архиве")
             else:
                 def copy_original():
+                    on_bytes = self._byte_progress(states.SOURCE_COPIED, planned.index,
+                                                   file_result.signature["size"])
                     _, digest = safe_copy.copy_verified(planned.source, planned.archive,
                                                         chunk_size=self.options.chunk_size,
-                                                        is_cancelled=self._is_cancelled)
+                                                        on_bytes=on_bytes, is_cancelled=self._is_cancelled)
                     if digest != source_hash:
                         raise IntegrityError(planned.source, "копия в архиве отличается от оригинала")
                     return digest
@@ -196,6 +201,28 @@ class FolderExecutor:
                 "progress", index=planned.index, stage=stage_name, fraction=fraction),
             is_cancelled=self._is_cancelled,
         )
+
+    def _byte_progress(self, stage, index, total_bytes):
+        """Коллбек copy_with_hash/copy_verified -> "progress" с долей 0..1.
+
+        Сам файл читается или пишется по сети десятки секунд, и раньше окно
+        об этом не знало до самого конца шага — выглядело как зависание
+        (my_reports, этапы 9–10). Коллбек создаётся заново на каждый вызов
+        (в т.ч. на каждую попытку при повторе после сетевой ошибки), поэтому
+        счётчик байтов не переживает повтор и не завышает долю.
+        """
+        progress = {"done": 0, "reported": -1.0}
+
+        def on_bytes(count):
+            if total_bytes <= 0:
+                return
+            progress["done"] += count
+            fraction = min(progress["done"] / total_bytes, 1.0)
+            if fraction - progress["reported"] >= PROGRESS_STEP or fraction >= 1.0:
+                progress["reported"] = fraction
+                self._emit("progress", index=index, stage=stage, fraction=fraction)
+
+        return on_bytes
 
     # -------------------------------------------------------------- фаза B
 
@@ -251,17 +278,10 @@ class FolderExecutor:
 
         after(value) возвращает поля, которые становятся известны только
         после действия (хеши, размеры) — без них откат работать не сможет.
-
-        Для сетевых шагов (чтение/запись по R:/N:) отдельно шлём "progress"
-        без доли выполнения: сам файл может копироваться десятки секунд, а
-        конвертация — меньше секунды, и без этого сигнала окно долго не
-        меняет текст и выглядит зависшим (см. my_reports, этап 9).
         """
         states.check_transition(file_result.state, state)
         folder = self._folder_of(file_result)
         self.journal.file_state(folder, file_result.index, state, phase="intent", **fields)
-        if state in NETWORK_STEP_STATES:
-            self._emit("progress", index=file_result.index, stage=state, fraction=None)
         value = action() if action is not None else None
         file_result.state = state
         self.journal.file_state(folder, file_result.index, state, phase="done",

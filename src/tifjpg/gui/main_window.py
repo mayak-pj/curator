@@ -5,6 +5,7 @@
 """
 
 import json
+import math
 import os
 import sys
 import time
@@ -21,13 +22,32 @@ from tifjpg.gui.bridge import TASK_DONE, TASK_FAILED, Worker
 from tifjpg.gui.error_panel import ErrorPanel
 from tifjpg.gui.folder_list import FolderList
 
-# Подписи для сетевых шагов (executor.NETWORK_STEP_STATES) — без них статус
-# "encode 100 %" висит на экране всё время, пока файл копируется по сети.
-NETWORK_STEP_LABELS = {
+# Подписи шагов конвертации и сетевых шагов (executor.py шлёт их байтовым
+# прогрессом) — без них статус часами не меняется на "encode 100 %", пока
+# файл на самом деле ещё копируется по сети.
+STAGE_LABELS = {
+    "histogram": "анализ снимка",
+    "encode": "сохранение JPEG",
     states.STAGED: "чтение оригинала",
     states.JPEG_UPLOADED: "запись JPEG",
     states.SOURCE_COPIED: "копирование оригинала в архив",
 }
+
+# Доля "Общего прогресса", которую занимает текущий файл по шагам: сумма
+# равна 1.0. "convert" — общий бакет для "histogram"+"encode" (обе эти
+# стадии и так уже сообщают долю в одной сквозной шкале 0..1 — см.
+# imaging/vips_converter.py, _ProgressTracker). Подобраны по замерам на
+# целевой машине (my_reports, этапы 9-10): дольше всего — сеть.
+STAGE_WEIGHTS = {
+    states.STAGED: 0.35,
+    "convert": 0.10,
+    states.JPEG_UPLOADED: 0.20,
+    states.SOURCE_COPIED: 0.35,
+}
+
+
+def _progress_bucket(stage):
+    return "convert" if stage in ("histogram", "encode") else stage
 
 
 class _Lightbulb(tk.Canvas):
@@ -37,7 +57,11 @@ class _Lightbulb(tk.Canvas):
     Windows 7 нет цветных эмодзи, вместо значка был бы квадратик-заглушка.
     """
 
-    SIZE = 22
+    SIZE = 34
+    _GLOW = "#fff3cf"
+    _GLASS_LIT = "#ffd35c"
+    _OUTLINE_LIT = "#c9971f"
+    _BASE = "#8a8f98"
 
     def __init__(self, master, command):
         super().__init__(master, width=self.SIZE, height=self.SIZE, highlightthickness=0, cursor="hand2")
@@ -47,13 +71,29 @@ class _Lightbulb(tk.Canvas):
     def set_lit(self, lit):
         self.configure(background=theme.background())
         self.delete("all")
-        cx, top, r = self.SIZE // 2, 3, 6
+        cx, cy, r = self.SIZE // 2, self.SIZE // 2 - 3, 9
+
         if lit:
-            fill, outline = "#f2c94c", "#c9971f"
+            self.create_oval(cx - r - 5, cy - r - 5, cx + r + 5, cy + r + 5,
+                             fill=self._GLOW, outline="")
+            for angle in (-55, -20, 20, 55):
+                radians = math.radians(angle - 90)
+                x1, y1 = cx + (r + 3) * math.cos(radians), cy + (r + 3) * math.sin(radians)
+                x2, y2 = cx + (r + 8) * math.cos(radians), cy + (r + 8) * math.sin(radians)
+                self.create_line(x1, y1, x2, y2, fill=self._OUTLINE_LIT, width=2, capstyle="round")
+            glass_fill, glass_outline = self._GLASS_LIT, self._OUTLINE_LIT
         else:
-            fill, outline = theme.background(), theme.muted()
-        self.create_oval(cx - r, top, cx + r, top + 2 * r, fill=fill, outline=outline)
-        self.create_rectangle(cx - 3, top + 2 * r - 1, cx + 3, top + 2 * r + 3, fill=outline, outline=outline)
+            glass_fill, glass_outline = theme.background(), theme.muted()
+
+        self.create_oval(cx - r, cy - r, cx + r, cy + r, fill=glass_fill, outline=glass_outline, width=2)
+        base_top = cy + r - 2
+        self.create_rectangle(cx - 5, base_top, cx + 5, base_top + 7,
+                              fill=self._BASE if lit else theme.muted(), outline="")
+        for offset in (2, 4, 6):
+            self.create_line(cx - 5, base_top + offset, cx + 5, base_top + offset,
+                             fill=theme.background())
+        self.create_polygon(cx - 4, base_top + 7, cx + 4, base_top + 7, cx + 2, base_top + 11,
+                            cx - 2, base_top + 11, fill=self._BASE if lit else theme.muted(), outline="")
 
 
 class MainWindow:
@@ -72,6 +112,7 @@ class MainWindow:
         self.processed_folders = []
         self._current_folder = None
         self._current_folder_files = 0
+        self._file_stage_fraction = {}
         self._session_started_at = 0.0
 
         gui_state = self._load_gui_state()
@@ -187,9 +228,6 @@ class MainWindow:
         self.worker.submit("rollback_all", self.service.rollback_all)
 
     def _accept(self):
-        if not messagebox.askyesno("Принять",
-                                   "Принять результат? После этого откат из окна будет недоступен."):
-            return
         self.service.accept()
         self.folders.disable_all_rollback()
         self.accept_button.configure(state="disabled")
@@ -216,27 +254,29 @@ class MainWindow:
             self._current_folder_files = event["files"]
             self.folders.set_status(event["folder"], *status_module.folder_status("running"))
             self.folders.show(event["folder"])
-            self.current_var.set("Папка: {} ({} файлов)".format(event["folder"], event["files"]))
         elif kind == ev.FOLDER_FINISHED:
             self._on_folder_finished(event)
         elif kind == ev.FOLDER_SKIPPED:
             self.folders.set_status(event["folder"], "пропущена: занята другим пользователем", "warning")
             self.errors.add(event["reason"], "warning", event["folder"])
-        elif kind == ev.FILE_PREPARED:
-            # Фаза A (чтение, конвертация, копирование в архив) занимает почти
-            # всё время файла; "file_completed" из фазы B приходит пачкой в
-            # конце папки и раньше давал полосе прогресса дёргаться скачками.
-            self.done_files += 1
-            self._update_progress()
+        elif kind == ev.FILE_STARTED:
+            # Строка папки и строка снизу берут номер файла из одного и того
+            # же события — иначе они на время расходятся (my_reports, 01.10.2026):
+            # одна ещё показывает прошлый файл, другая — уже следующий.
+            self._file_stage_fraction = {}
             if event.get("folder") == self._current_folder and self._current_folder_files:
                 self.folders.set_status(self._current_folder, *status_module.folder_progress(
                     event.get("index", 0), self._current_folder_files))
-        elif kind == ev.PROGRESS and event.get("stage") in ("histogram", "encode"):
+        elif kind == ev.FILE_PREPARED:
+            self.done_files += 1
+            self._file_stage_fraction = {}
+            self._update_progress()
+        elif kind == ev.PROGRESS and event.get("stage") in STAGE_LABELS:
+            fraction = event.get("fraction", 0)
+            self._file_stage_fraction[_progress_bucket(event["stage"])] = fraction
             self.status_var.set("Файл #{}: {} {:.0f} %".format(
-                event.get("index", "?"), event["stage"], event.get("fraction", 0) * 100))
-        elif kind == ev.PROGRESS and event.get("stage") in NETWORK_STEP_LABELS:
-            self.status_var.set("Файл #{}: {}…".format(
-                event.get("index", "?"), NETWORK_STEP_LABELS[event["stage"]]))
+                event.get("index", "?"), STAGE_LABELS[event["stage"]], fraction * 100))
+            self._update_progress()
         elif kind == ev.PROGRESS and event.get("stage") == "scan":
             self.status_var.set("Просмотр: {}".format(event["folder"]))
         elif kind == ev.RETRY:
@@ -265,8 +305,10 @@ class MainWindow:
     def _on_session_started(self, event):
         self.total_files = max(event.get("files", 0), 1)
         self.done_files = 0
+        self._file_stage_fraction = {}
         self._session_started_at = time.monotonic()
         self.progress.configure(maximum=self.total_files, value=0)
+        self._update_progress()
 
     def _on_folder_finished(self, event):
         folder = event["folder"]
@@ -387,9 +429,15 @@ class MainWindow:
             self.folders.set_rollback_enabled(folder, True)
 
     def _update_progress(self):
-        self.progress.configure(value=min(self.done_files, self.total_files))
+        # Доля текущего файла по весам STAGE_WEIGHTS — без неё полоса стояла
+        # бы на месте весь файл и прыгала целой единицей только в его конце.
+        file_fraction = sum(weight * self._file_stage_fraction.get(key, 0.0)
+                            for key, weight in STAGE_WEIGHTS.items())
+        value = min(self.done_files + file_fraction, self.total_files)
+        self.progress.configure(value=value)
+        fraction = value / self.total_files if self.total_files else 0.0
         elapsed = time.monotonic() - self._session_started_at
-        self.status_var.set(status_module.progress_line(self.done_files, self.total_files, elapsed))
+        self.current_var.set(status_module.progress_line(self.done_files, self.total_files, fraction, elapsed))
 
     def _on_close(self):
         if self.worker.busy:

@@ -34,9 +34,9 @@ def initial_status(plan):
     return WAITING
 
 
-def folder_progress(done, total):
-    """Строка статуса папки, пока она обрабатывается: «файл N из M»."""
-    return ("обрабатывается: файл {} из {}".format(done, total), RUNNING)
+def folder_progress(index, total):
+    """Строка статуса папки, пока она обрабатывается: «файл N из M» (N — текущий)."""
+    return ("обрабатывается: файл {} из {}".format(index, total), RUNNING)
 
 
 def folder_status(state, error=None, rolled_back=False):
@@ -86,21 +86,26 @@ def summary_line(summary):
         summary.files, ", ".join(parts), summary.seconds)
 
 
-def progress_line(done, total, elapsed_seconds):
-    """Строка над списком папок во время обработки: доля и оценка остатка."""
-    percent = int(100 * done / total) if total else 0
-    line = "Готово файлов: {} из {} · {} %".format(done, total, percent)
-    remaining = _estimate_remaining(done, total, elapsed_seconds)
+def progress_line(done_files, total_files, fraction, elapsed_seconds):
+    """Строка над списком папок во время обработки: доля и оценка остатка.
+
+    fraction — точная доля 0..1 с учётом продвижения внутри текущего файла
+    (та же величина, что заполняет полосу «Общий прогресс»), поэтому
+    процент в тексте и сама полоса никогда не расходятся (my_reports, 01.10.2026).
+    """
+    percent = int(round(fraction * 100))
+    line = "Готово файлов: {} из {} · {} %".format(done_files, total_files, percent)
+    remaining = _estimate_remaining(fraction, elapsed_seconds)
     if remaining is not None:
         line += " · осталось ~{}".format(format_duration(remaining))
     return line
 
 
-def _estimate_remaining(done, total, elapsed_seconds):
-    """Оценка по среднему темпу — доступна не раньше первого готового файла."""
-    if done <= 0 or done >= total:
+def _estimate_remaining(fraction, elapsed_seconds):
+    """Оценка по среднему темпу — доступна после первого заметного продвижения."""
+    if fraction <= 0 or fraction >= 1:
         return None
-    return (elapsed_seconds / done) * (total - done)
+    return elapsed_seconds / fraction - elapsed_seconds
 
 
 def format_duration(seconds):

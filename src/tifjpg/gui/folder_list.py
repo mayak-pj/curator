@@ -124,9 +124,27 @@ class FolderList(ttk.Frame):
             self._on_rollback(folder)
 
     def _on_wheel(self, event):
+        # bind_all ловит колесо по всему окну (иначе дети строк — подписи,
+        # кнопки — перехватывали бы его первыми), но без проверки указателя
+        # список крутился бы и от колеса над другим виджетом. Заодно не даём
+        # дать сработать прокрутке по устаревшему scrollregion: во время
+        # обработки текст строк часто меняется, и без свежего пересчёта
+        # граница съезжала — сверху первой папки появлялся пустой отступ
+        # (my_reports, 01.10.2026).
+        if not self._is_pointer_inside(event):
+            return
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
         if event.num == 4:
             self._canvas.yview_scroll(-1, "units")
         elif event.num == 5:
             self._canvas.yview_scroll(1, "units")
         else:
             self._canvas.yview_scroll(-1 * (event.delta // 120 or (1 if event.delta < 0 else -1)), "units")
+
+    def _is_pointer_inside(self, event):
+        widget = self.winfo_containing(event.x_root, event.y_root)
+        while widget is not None:
+            if widget is self:
+                return True
+            widget = widget.master
+        return False
