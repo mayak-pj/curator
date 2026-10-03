@@ -9,6 +9,7 @@ LIGHT = {
     "border": "#d8dadd",
     "text": "#1f2328",
     "muted": "#57606a",
+    "button_text": "#000000",
     "colours": {
         "success": "#1a7f37",
         "error": "#b42318",
@@ -24,6 +25,7 @@ DARK = {
     "border": "#45474e",
     "text": "#e3e5e8",
     "muted": "#9aa0a6",
+    "button_text": "#ffffff",
     "colours": {
         "success": "#3fb950",
         "error": "#f85149",
@@ -71,10 +73,13 @@ def apply(root, dark=False):
     style.configure("Surface.TLabel", background=p["surface"])
     style.configure("Muted.TLabel", foreground=p["muted"])
     style.configure("Heading.TLabel", font=FONT_BOLD)
-    style.configure("TButton", padding=(10, 4), background=p["surface"], foreground=p["text"])
+    # Один и тот же цвет текста и фона во всех состояниях (обычная кнопка,
+    # под курсором, неактивная) — пользователь явно просил убрать разнобой
+    # (чёрный текст на светлой теме, белый на тёмной, фон кнопки не плывёт).
+    style.configure("TButton", padding=(10, 4), background=p["surface"], foreground=p["button_text"])
     style.map("TButton",
-             background=[("active", p["border"]), ("disabled", p["background"])],
-             foreground=[("disabled", p["muted"])])
+             background=[("active", p["surface"]), ("disabled", p["surface"])],
+             foreground=[("active", p["button_text"]), ("disabled", p["button_text"])])
     style.configure("TEntry", fieldbackground=p["surface"], foreground=p["text"])
     style.configure("TLabelframe", background=p["background"])
     style.configure("TLabelframe.Label", background=p["background"], foreground=p["muted"])
@@ -110,3 +115,7 @@ def text():
 
 def muted():
     return _active["muted"]
+
+
+def button_text():
+    return _active["button_text"]

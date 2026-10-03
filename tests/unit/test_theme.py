@@ -26,6 +26,15 @@ def test_switching_to_dark_changes_every_accessor():
         assert theme.colour(key) == theme.DARK["colours"][key]
 
 
+def test_button_text_is_black_on_light_and_white_on_dark():
+    # Пользователь явно просил ровно это (01.10.2026, запуск на Mac):
+    # один и тот же цвет текста кнопок в каждой теме, без разнобоя.
+    theme.set_theme(False)
+    assert theme.button_text() == "#000000"
+    theme.set_theme(True)
+    assert theme.button_text() == "#ffffff"
+
+
 def test_unknown_colour_key_falls_back_to_text():
     theme.set_theme(False)
     assert theme.colour("no-such-key") == theme.text()
