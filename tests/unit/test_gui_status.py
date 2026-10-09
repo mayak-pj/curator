@@ -1,13 +1,13 @@
 import pytest
 
-from tifjpg.app.service import FolderOutcome, SessionSummary
-from tifjpg.domain import states
-from tifjpg.domain.folder_rules import classify
-from tifjpg.domain.models import FolderSnapshot
-from tifjpg.domain.naming import XrayNaming
-from tifjpg.gui import status as gui_status
-from tifjpg.transaction.planner import plan_folder
-from tifjpg.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK
+from curator.app.service import FolderOutcome, SessionSummary
+from curator.domain import states
+from curator.domain.folder_rules import classify
+from curator.domain.models import FolderSnapshot
+from curator.domain.naming import XrayNaming
+from curator.gui import status as gui_status
+from curator.transaction.planner import plan_folder
+from curator.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK
 
 naming = XrayNaming()
 

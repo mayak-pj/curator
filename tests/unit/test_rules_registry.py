@@ -1,9 +1,9 @@
 import pytest
 
-from tifjpg.domain import folder_rules
-from tifjpg.domain.folder_rules import DEFAULT_RULES, FolderFacts, Rule, make_classifier
-from tifjpg.domain.models import CONFLICT, DONE, PROCESS_ROOT, FolderSnapshot
-from tifjpg.domain.naming import XrayNaming
+from curator.domain import folder_rules
+from curator.domain.folder_rules import DEFAULT_RULES, FolderFacts, Rule, make_classifier
+from curator.domain.models import CONFLICT, DONE, PROCESS_ROOT, FolderSnapshot
+from curator.domain.naming import XrayNaming
 
 naming = XrayNaming()
 

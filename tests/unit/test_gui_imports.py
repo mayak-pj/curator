@@ -6,7 +6,7 @@ pytest.importorskip("tkinter")
 
 
 def test_gui_modules_import():
-    from tifjpg.gui import error_panel, folder_list, main_window, recovery_dialog, theme
+    from curator.gui import error_panel, folder_list, main_window, recovery_dialog, theme
 
     assert hasattr(main_window, "MainWindow")
     assert hasattr(folder_list, "FolderList")
@@ -16,7 +16,7 @@ def test_gui_modules_import():
 
 
 def test_entry_point_routes_arguments():
-    from tifjpg.app.cli import build_parser
+    from curator.app.cli import build_parser
 
     parser = build_parser()
     assert parser.parse_args(["scan", "/tmp"]).command == "scan"

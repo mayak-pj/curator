@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from tifjpg.fs.locks import FolderLock, FolderLocked, is_stale, lock_filename, normalize, read_lock
+from curator.fs.locks import FolderLock, FolderLocked, is_stale, lock_filename, normalize, read_lock
 
 
 def test_same_folder_gives_same_lock_name(tmp_path):

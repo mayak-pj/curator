@@ -1,8 +1,8 @@
 import os
 
 from tests.integration.test_scanner import build_tree
-from tifjpg.app.scan import as_dict, render_report, scan_root
-from tifjpg.domain.models import CONFLICT, DONE
+from curator.app.scan import as_dict, render_report, scan_root
+from curator.domain.models import CONFLICT, DONE
 
 
 def test_scan_root_summarises_tree(tmp_path):

@@ -1,7 +1,7 @@
 import pytest
 
-from tifjpg.domain.naming import XrayNaming, normalize
-from tifjpg.domain.ordering import natural_sorted
+from curator.domain.naming import XrayNaming, normalize
+from curator.domain.ordering import natural_sorted
 
 naming = XrayNaming()
 

@@ -4,10 +4,10 @@ import pytest
 
 from tests.conftest import gradient, read_row, vips_image
 from tests.tiff_writer import build_tiff, write_tiff
-from tifjpg.domain.errors import ConversionCancelled, FileProcessingError, UnsupportedImageError
-from tifjpg.imaging import ConversionOptions, ToneSpec, VipsTiffJpegConverter, validate_jpeg
-from tifjpg.imaging.jpeg_info import read_jpeg_header
-from tifjpg.imaging.tone import build_lut
+from curator.domain.errors import ConversionCancelled, FileProcessingError, UnsupportedImageError
+from curator.imaging import ConversionOptions, ToneSpec, VipsTiffJpegConverter, validate_jpeg
+from curator.imaging.jpeg_info import read_jpeg_header
+from curator.imaging.tone import build_lut
 
 pytestmark = pytest.mark.vips
 

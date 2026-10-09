@@ -3,13 +3,13 @@ import os
 import pytest
 
 from tests.integration.test_executor import listing, make_folder, run_folder
-from tifjpg.domain import states
-from tifjpg.fs import safe_copy
-from tifjpg.fs.hashing import file_hash
-from tifjpg.transaction import executor as executor_module
-from tifjpg.transaction.journal import Journal, read_journal, session_header
-from tifjpg.transaction.records import folders_from_journal
-from tifjpg.transaction.recovery import (
+from curator.domain import states
+from curator.fs import safe_copy
+from curator.fs.hashing import file_hash
+from curator.transaction import executor as executor_module
+from curator.transaction.journal import Journal, read_journal, session_header
+from curator.transaction.records import folders_from_journal
+from curator.transaction.recovery import (
     CONSISTENT,
     PHASE_A_LEFTOVERS,
     PHASE_B_UNFINISHED,
@@ -18,7 +18,7 @@ from tifjpg.transaction.recovery import (
     finish,
     inspect,
 )
-from tifjpg.transaction.rollback import ROLLED_BACK, rollback_folder
+from curator.transaction.rollback import ROLLED_BACK, rollback_folder
 
 pytestmark = pytest.mark.vips
 

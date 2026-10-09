@@ -14,12 +14,12 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
-from tifjpg.imaging.histogram import downsample, histogram_stats  # noqa: E402
-from tifjpg.imaging.jpeg_info import read_jpeg_header  # noqa: E402
-from tifjpg.imaging.tiff_tags import read_tiff_header  # noqa: E402
-from tifjpg.imaging.tone import ToneSpec, window_from_histogram  # noqa: E402
-from tifjpg.imaging.vips_converter import read_histogram  # noqa: E402
-from tifjpg.imaging.vips_runtime import load_pyvips, vips_version  # noqa: E402
+from curator.imaging.histogram import downsample, histogram_stats  # noqa: E402
+from curator.imaging.jpeg_info import read_jpeg_header  # noqa: E402
+from curator.imaging.tiff_tags import read_tiff_header  # noqa: E402
+from curator.imaging.tone import ToneSpec, window_from_histogram  # noqa: E402
+from curator.imaging.vips_converter import read_histogram  # noqa: E402
+from curator.imaging.vips_runtime import load_pyvips, vips_version  # noqa: E402
 
 TIFF_EXTENSIONS = (".tif", ".tiff")
 JPEG_EXTENSIONS = (".jpg", ".jpeg")

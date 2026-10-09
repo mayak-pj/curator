@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Проверка PE-файлов (exe/dll/pyd) на совместимость с Windows 7 x64.
 
-    python scripts/check_pe_imports.py dist/TifJpg [--report report.txt]
+    python scripts/check_pe_imports.py dist/Curator [--report report.txt]
 
 Эвристика, а не гарантия (окончательная проверка — запуск на Win7):
   * каждая импортируемая DLL должна лежать в сборке или быть системной DLL Windows 7;

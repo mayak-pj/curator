@@ -1,6 +1,6 @@
 import pytest
 
-from tifjpg.imaging.jpeg_info import ZIGZAG, estimate_quality, ijg_table
+from curator.imaging.jpeg_info import ZIGZAG, estimate_quality, ijg_table
 
 
 @pytest.mark.parametrize("quality", [1, 10, 50, 75, 85, 90, 95, 99, 100])

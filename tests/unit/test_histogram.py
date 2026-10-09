@@ -1,4 +1,4 @@
-from tifjpg.imaging.histogram import downsample, histogram_stats, percentile_value
+from curator.imaging.histogram import downsample, histogram_stats, percentile_value
 
 
 def test_stats_of_small_histogram():

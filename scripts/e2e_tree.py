@@ -17,7 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src"))
 
-from tifjpg.imaging.vips_runtime import load_pyvips  # noqa: E402
+from curator.imaging.vips_runtime import load_pyvips  # noqa: E402
 
 # Папки с кириллицей, пробелами и № — как на рабочих дисках.
 LAYOUT = {

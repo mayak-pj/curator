@@ -1,4 +1,4 @@
-# Ресурс версии для tifjpg.exe: без него антивирусы и AppLocker относятся к файлу
+# Ресурс версии для curator.exe: без него антивирусы и AppLocker относятся к файлу
 # с большим подозрением, а в свойствах файла не видно, что это за программа.
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -16,12 +16,12 @@ VSVersionInfo(
       StringTable(
         '041904b0',
         [
-          StringStruct('CompanyName', 'tifjpg'),
-          StringStruct('FileDescription', 'TifJpg — конвертер рентгенограмм TIFF в JPEG'),
+          StringStruct('CompanyName', 'curator'),
+          StringStruct('FileDescription', 'Curator — конвертер рентгенограмм TIFF в JPEG'),
           StringStruct('FileVersion', '0.1.0'),
-          StringStruct('InternalName', 'tifjpg'),
-          StringStruct('OriginalFilename', 'tifjpg.exe'),
-          StringStruct('ProductName', 'TifJpg'),
+          StringStruct('InternalName', 'curator'),
+          StringStruct('OriginalFilename', 'curator.exe'),
+          StringStruct('ProductName', 'Curator'),
           StringStruct('ProductVersion', '0.1.0'),
           StringStruct('LegalCopyright', ''),
         ])

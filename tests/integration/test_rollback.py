@@ -3,11 +3,11 @@ import os
 import pytest
 
 from tests.integration.test_executor import build_plan, listing, make_folder, run_folder
-from tifjpg.domain import states
-from tifjpg.fs.hashing import file_hash
-from tifjpg.transaction.journal import Journal, read_journal
-from tifjpg.transaction.records import folder_from_result, folders_from_journal
-from tifjpg.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK, rollback_folder
+from curator.domain import states
+from curator.fs.hashing import file_hash
+from curator.transaction.journal import Journal, read_journal
+from curator.transaction.records import folder_from_result, folders_from_journal
+from curator.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK, rollback_folder
 
 pytestmark = pytest.mark.vips
 
@@ -94,7 +94,7 @@ def test_modified_archive_copy_is_not_used(tmp_path):
 
 
 def test_rollback_after_failed_phase_a_has_nothing_to_do(tmp_path, monkeypatch):
-    from tifjpg.transaction import executor as executor_module
+    from curator.transaction import executor as executor_module
 
     folder = make_folder(tmp_path, ["1.tif"])
     monkeypatch.setattr(executor_module, "copy_with_hash",

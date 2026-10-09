@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from tifjpg.config import ConfigError, Settings, from_dict, load
+from curator.config import ConfigError, Settings, from_dict, load
 
 
 def test_defaults_match_decision_d12():

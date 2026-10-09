@@ -4,15 +4,15 @@ import pytest
 
 from tests.integration.test_executor import listing, make_folder
 from tests.integration.test_scanner import build_tree
-from tifjpg.app import events as ev
-from tifjpg.app.service import CONTINUE, ProcessingService
-from tifjpg.appdirs import AppPaths
-from tifjpg.config import Settings
-from tifjpg.domain import states
-from tifjpg.domain.errors import PreconditionError, TifJpgError
-from tifjpg.fs.hashing import file_hash
-from tifjpg.fs.locks import FolderLock
-from tifjpg.transaction import executor as executor_module
+from curator.app import events as ev
+from curator.app.service import CONTINUE, ProcessingService
+from curator.appdirs import AppPaths
+from curator.config import Settings
+from curator.domain import states
+from curator.domain.errors import PreconditionError, CuratorError
+from curator.fs.hashing import file_hash
+from curator.fs.locks import FolderLock
+from curator.transaction import executor as executor_module
 
 pytestmark = pytest.mark.vips
 
@@ -110,7 +110,7 @@ def test_accept_closes_the_session(tmp_path):
     service.accept()
 
     assert summary.accepted
-    with pytest.raises(TifJpgError):
+    with pytest.raises(CuratorError):
         service.rollback_folder(os.path.join(root, "Объект 001"))
 
 

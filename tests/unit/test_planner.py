@@ -1,9 +1,9 @@
 import os
 
-from tifjpg.domain.folder_rules import classify
-from tifjpg.domain.models import PROCESS_ROOT, FolderDecision, FolderSnapshot
-from tifjpg.domain.naming import XrayNaming
-from tifjpg.transaction.planner import plan_folder
+from curator.domain.folder_rules import classify
+from curator.domain.models import PROCESS_ROOT, FolderDecision, FolderSnapshot
+from curator.domain.naming import XrayNaming
+from curator.transaction.planner import plan_folder
 
 naming = XrayNaming()
 FOLDER = os.path.join("C:" + os.sep, "work", "Объект 1")

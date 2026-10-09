@@ -1,7 +1,7 @@
 import pytest
 
-from tifjpg.imaging.base import ConversionOptions
-from tifjpg.imaging.tone import LINEAR, ToneSpec, build_lut, window_from_histogram
+from curator.imaging.base import ConversionOptions
+from curator.imaging.tone import LINEAR, ToneSpec, build_lut, window_from_histogram
 
 
 def test_defaults_follow_decision_d12():

@@ -1,6 +1,6 @@
-from tifjpg.domain.folder_rules import classify
-from tifjpg.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT, FolderSnapshot
-from tifjpg.domain.naming import XrayNaming
+from curator.domain.folder_rules import classify
+from curator.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT, FolderSnapshot
+from curator.domain.naming import XrayNaming
 
 naming = XrayNaming()
 

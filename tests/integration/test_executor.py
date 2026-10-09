@@ -5,17 +5,17 @@ import pytest
 
 from tests.conftest import gradient
 from tests.tiff_writer import write_tiff
-from tifjpg.domain import states
-from tifjpg.domain.errors import IntegrityError, PreconditionError
-from tifjpg.domain.folder_rules import classify
-from tifjpg.domain.naming import XrayNaming
-from tifjpg.fs import safe_copy
-from tifjpg.fs.hashing import file_hash
-from tifjpg.fs.scanner import read_folder
-from tifjpg.transaction import executor as executor_module
-from tifjpg.transaction.executor import ExecutionOptions, FolderExecutor
-from tifjpg.transaction.journal import Journal, read_journal, session_header
-from tifjpg.transaction.planner import plan_folder
+from curator.domain import states
+from curator.domain.errors import IntegrityError, PreconditionError
+from curator.domain.folder_rules import classify
+from curator.domain.naming import XrayNaming
+from curator.fs import safe_copy
+from curator.fs.hashing import file_hash
+from curator.fs.scanner import read_folder
+from curator.transaction import executor as executor_module
+from curator.transaction.executor import ExecutionOptions, FolderExecutor
+from curator.transaction.journal import Journal, read_journal, session_header
+from curator.transaction.planner import plan_folder
 
 pytestmark = pytest.mark.vips
 

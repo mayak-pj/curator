@@ -3,11 +3,11 @@ import sys
 
 import pytest
 
-import tifjpg.fs.scanner as scanner_module
-from tifjpg.domain.folder_rules import classify
-from tifjpg.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT
-from tifjpg.domain.naming import XrayNaming
-from tifjpg.fs.scanner import read_folder, scan_tree
+import curator.fs.scanner as scanner_module
+from curator.domain.folder_rules import classify
+from curator.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT
+from curator.domain.naming import XrayNaming
+from curator.fs.scanner import read_folder, scan_tree
 
 naming = XrayNaming()
 

@@ -1,6 +1,6 @@
 """Палитра тёмной/светлой темы — чистая логика, без создания окна (ARCHITECTURE.md, 18)."""
 
-from tifjpg.gui import theme
+from curator.gui import theme
 
 
 def teardown_function(_test):

@@ -1,12 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 # Этап 2: smoke-сборка для проверки стека на Windows 7.
 #   python -m PyInstaller packaging/smoke.spec --noconfirm --distpath dist --workpath build/pyinstaller
-# DLL libvips берутся из TIFJPG_VIPS_DIR или build/vips (scripts/fetch_libvips.py).
+# DLL libvips берутся из CURATOR_VIPS_DIR или build/vips (scripts/fetch_libvips.py).
 
 import os
 
 ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
-VIPS_DIR = os.environ.get("TIFJPG_VIPS_DIR") or os.path.join(ROOT, "build", "vips")
+VIPS_DIR = os.environ.get("CURATOR_VIPS_DIR") or os.path.join(ROOT, "build", "vips")
 # DLL кладутся в корень _internal: PyInstaller и так собирает туда зависимости,
 # отдельная подпапка приводила к дублированию всех DLL.
 vips_binaries = [
@@ -41,7 +41,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="tifjpg_smoke",
+    name="curator_smoke",
     console=False,
     upx=False,
 )
@@ -51,5 +51,5 @@ coll = COLLECT(
     a.datas,
     strip=False,
     upx=False,
-    name="tifjpg_smoke",
+    name="curator_smoke",
 )

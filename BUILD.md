@@ -1,6 +1,6 @@
 # Сборка
 
-Собирает GitHub Actions: `.github/workflows/build-windows.yml`, запуск на каждый push в `main` и вручную. Результат — два артефакта: `tifjpg-win7-x64.zip` (программа) и `tifjpg_smoke-win7-x64.zip` (диагностика).
+Собирает GitHub Actions: `.github/workflows/build-windows.yml`, запуск на каждый push в `main` и вручную. Результат — два артефакта: `curator-win7-x64.zip` (программа) и `curator_smoke-win7-x64.zip` (диагностика).
 
 ## Закреплённые версии
 
@@ -32,7 +32,7 @@
 2. Скачивает архив libvips, сверяет sha256, распаковывает DLL, лицензию и список версий компонентов.
 3. Проверяет импорты DLL на совместимость с Windows 7.
 4. Прогоняет тесты (`pytest`) на Windows.
-5. Собирает `tifjpg.exe` и `tifjpg_smoke.exe` (onedir, без UPX, с ресурсом версии).
+5. Собирает `curator.exe` и `curator_smoke.exe` (onedir, без UPX, с ресурсом версии).
 6. Проверяет импорты собранных папок — шаг блокирующий, при проблемах сборка падает.
 7. Прогоняет собранное приложение на сгенерированном дереве папок: обработка, сверка результата по контрольным суммам, откат и сверка возврата в исходное состояние.
 8. Кладёт в архив документацию, пример конфигурации и лицензии.
@@ -44,10 +44,10 @@ UCRT (`ucrtbase.dll`, `api-ms-win-*.dll`) **намеренно исключён*
 ```bat
 python -m pip install -r requirements-dev.txt
 python scripts\fetch_libvips.py --dest build\vips
-set TIFJPG_VIPS_DIR=%CD%\build\vips
+set CURATOR_VIPS_DIR=%CD%\build\vips
 python -m pytest -q
-python -m PyInstaller packaging\tifjpg.spec --noconfirm --distpath dist --workpath build\pyinstaller
-python scripts\check_pe_imports.py dist\tifjpg
+python -m PyInstaller packaging\curator.spec --noconfirm --distpath dist --workpath build\pyinstaller
+python scripts\check_pe_imports.py dist\curator
 ```
 
 ## Разработка на macOS
@@ -57,7 +57,7 @@ brew install vips uv
 uv venv --python 3.8 .venv
 uv pip install --python .venv/bin/python -r requirements-dev.txt
 .venv/bin/python -m pytest -q
-PYTHONPATH=src .venv/bin/python -m tifjpg scan /путь/к/папке
+PYTHONPATH=src .venv/bin/python -m curator scan /путь/к/папке
 ```
 
 Windows-специфичное (сборка exe, длинные пути, UNC-нормализация) на macOS не проверяется — для этого есть CI и целевой ПК.
@@ -65,11 +65,11 @@ Windows-специфичное (сборка exe, длинные пути, UNC-�
 ## Консольные команды
 
 ```
-python -m tifjpg                       окно программы
-python -m tifjpg scan ROOT             сухой прогон, ничего не меняет
-python -m tifjpg process ROOT          обработка (ключ --rollback-all откатывает сразу)
-python -m tifjpg convert SRC DST       один файл
-python -m tifjpg recover               незавершённые операции прошлых запусков
+python -m curator                       окно программы
+python -m curator scan ROOT             сухой прогон, ничего не меняет
+python -m curator process ROOT          обработка (ключ --rollback-all откатывает сразу)
+python -m curator convert SRC DST       один файл
+python -m curator recover               незавершённые операции прошлых запусков
 ```
 
-Собранный `tifjpg.exe` принимает те же команды. Он собран как оконное приложение, поэтому вывод в консоль не печатается — смотрите логи в папке программы.
+Собранный `curator.exe` принимает те же команды. Он собран как оконное приложение, поэтому вывод в консоль не печатается — смотрите логи в папке программы.
