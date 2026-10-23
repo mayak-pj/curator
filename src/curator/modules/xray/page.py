@@ -199,6 +199,8 @@ class XrayPage(QWidget):
             self.splitter.setSizes([max(total - ERRORS_HEIGHT, 1), ERRORS_HEIGHT])
 
     def _show_readiness(self):
+        # Всё в порядке — карточку не показываем; при проблеме она объясняет, почему обработка недоступна.
+        self.card.setVisible(not self.ready)
         self.status_title.setText("Готово к работе рядом с версией 1" if self.ready
                                   else "Обработка будет недоступна")
         self.status_text.setText(" · ".join(self.lines))
