@@ -32,3 +32,7 @@ promt.md
 
 # Отчёты и материалы с целевого ПК
 my_reports/
+
+# Отчёты и снимки проверочных сборок, запущенных из исходников
+packaging/*smoke_report.txt
+packaging/qt_smoke_*.png
