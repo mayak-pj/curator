@@ -63,7 +63,7 @@ def cmd_convert(args):
     )
     converter = converter_for(args.source)
     result = converter.convert(args.source, args.destination, options, progress=_print_progress)
-    sys.stderr.write("\n")
+    _stderr("\n")
     report = result.as_dict()
     if not args.no_validate:
         check = validate_jpeg(result.destination, result.width, result.height, result.bands)
@@ -144,8 +144,15 @@ def cmd_recover(args):
 
 
 def _print_progress(stage, fraction):
-    sys.stderr.write("\r{:<10} {:5.1f}%".format(stage, fraction * 100))
-    sys.stderr.flush()
+    _stderr("\r{:<10} {:5.1f}%".format(stage, fraction * 100))
+
+
+def _stderr(text):
+    """У оконной сборки (console=False) sys.stderr нет: запись в None уронила бы exe
+    в диалог PyInstaller, который ждёт нажатия, — команда не завершилась бы."""
+    if sys.stderr is not None:
+        sys.stderr.write(text)
+        sys.stderr.flush()
 
 
 def main(argv=None):
@@ -153,5 +160,5 @@ def main(argv=None):
     try:
         return args.handler(args)
     except (CuratorError, ValueError, OSError) as exc:
-        sys.stderr.write("\nОшибка: {}\n".format(exc))
+        _stderr("\nОшибка: {}\n".format(exc))
         return 2
