@@ -34,10 +34,11 @@ def _is_system_crt(entry):
 
 
 # Не нужны окну на виджетах (~33 МБ): opengl32sw.dll — запасной OpenGL (Mesa) для QtQuick/QOpenGLWidget;
-# qwebgl.dll — показ окна в браузере, тянет за собой Quick/Qml/Network/WebSockets.
+# qwebgl.dll — показ окна в браузере, тянет за собой Quick/Qml/Network/WebSockets;
+# qtuiotouchplugin.dll — сенсорный ввод по сети (TUIO), тянет Network.
 # Если что-то из этого всё же понадобится, check_pe_imports.py в CI сообщит о недостающей DLL.
 UNUSED_QT = {
-    "opengl32sw.dll", "qwebgl.dll", "qt5quick.dll", "qt5qml.dll", "qt5qmlmodels.dll", "qt5network.dll",
+    "opengl32sw.dll", "qwebgl.dll", "qtuiotouchplugin.dll", "qt5quick.dll", "qt5qml.dll", "qt5qmlmodels.dll", "qt5network.dll",
     "qt5websockets.dll",
 }
 
