@@ -21,7 +21,7 @@ import pefile
 WIN7_SYSTEM_DLLS = {
     "advapi32.dll", "bcrypt.dll", "bcryptprimitives.dll", "cfgmgr32.dll", "comctl32.dll", "comdlg32.dll", "crypt32.dll",
     "cryptbase.dll", "d2d1.dll", "d3d9.dll", "d3d10.dll", "d3d10_1.dll", "d3d11.dll", "dbghelp.dll",
-    "dnsapi.dll", "dwmapi.dll", "dwrite.dll", "dxgi.dll", "gdi32.dll", "gdiplus.dll", "imm32.dll",
+    "dnsapi.dll", "dwmapi.dll", "dwrite.dll", "dxgi.dll", "gdi32.dll", "gdiplus.dll", "imagehlp.dll", "imm32.dll",
     "iphlpapi.dll", "kernel32.dll", "kernelbase.dll", "mpr.dll", "msimg32.dll", "msvcrt.dll",
     "mswsock.dll", "ncrypt.dll", "netapi32.dll", "normaliz.dll", "ntdll.dll", "ole32.dll",
     "oleaut32.dll", "opengl32.dll", "powrprof.dll", "psapi.dll", "rpcrt4.dll", "secur32.dll",

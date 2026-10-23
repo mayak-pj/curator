@@ -33,7 +33,12 @@ def _is_system_crt(entry):
     return name == "ucrtbase.dll" or name.startswith("api-ms-win-")
 
 
-a.binaries = [entry for entry in a.binaries if not _is_system_crt(entry)]
+def _is_software_opengl(entry):
+    """opengl32sw.dll (Mesa, ~20 МБ) — запасной OpenGL для QtQuick/QOpenGLWidget; окну на виджетах не нужен."""
+    return os.path.basename(entry[0]).lower() == "opengl32sw.dll"
+
+
+a.binaries = [entry for entry in a.binaries if not (_is_system_crt(entry) or _is_software_opengl(entry))]
 
 pyz = PYZ(a.pure)
 exe = EXE(
