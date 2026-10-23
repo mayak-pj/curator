@@ -2,3 +2,8 @@
 pyvips==3.2.0
 cffi==1.17.1
 pycparser==2.23
+# Окно версии 2 (ARCHITECTURE.md, раздел 26) — те же версии, что в digger, проверены на целевом Win7.
+PyQt5==5.15.10
+PyQt5-Qt5==5.15.2; sys_platform != "darwin"
+PyQt5-Qt5==5.15.19; sys_platform == "darwin"
+PyQt5-sip==12.13.0

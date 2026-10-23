@@ -42,10 +42,14 @@ jobs:
       - name: Build smoke tool
         run: python -m PyInstaller packaging/smoke.spec --noconfirm --distpath dist --workpath build/pyinstaller
 
+      - name: Build Qt smoke tool
+        run: python -m PyInstaller packaging/qt_smoke.spec --noconfirm --distpath dist --workpath build/pyinstaller
+
       - name: Check bundles for Windows 7
         run: |
           python scripts/check_pe_imports.py dist/curator --report dist/curator/pe_imports_report.txt
           python scripts/check_pe_imports.py dist/curator_smoke --report dist/curator_smoke/pe_imports_report.txt
+          python scripts/check_pe_imports.py dist/curator_qt_smoke --report dist/curator_qt_smoke/pe_imports_report.txt
 
       # -------------------------------------------------- проверка собранного
 
@@ -60,6 +64,39 @@ jobs:
           Get-Content -Encoding UTF8 dist\curator_smoke\smoke_report.txt
           Remove-Item dist\curator_smoke\smoke_report.txt
           if ($process.ExitCode -ne 0) { throw "smoke завершился с кодом $($process.ExitCode)" }
+          # Версия 1 не должна случайно потянуть Qt (requirements.txt общий).
+          if (Test-Path dist\curator\_internal\PyQt5) { throw "PyQt5 попал в сборку версии 1" }
+
+      # Этап 11 (ARCHITECTURE.md, 26.3): Qt из папки с русским именем и по сетевому пути UNC.
+      - name: Qt smoke from Cyrillic folder and UNC path
+        shell: pwsh
+        env:
+          CURATOR_VIPS_DIR: ""
+        run: |
+          $bytes = (Get-ChildItem -Recurse -File dist\curator_qt_smoke | Measure-Object -Sum Length)
+          "Размер сборки Qt smoke: {0:N0} байт, файлов {1}" -f $bytes.Sum, $bytes.Count
+          $folder = Join-Path $PWD "build\Проверка Qt №1"
+          New-Item -ItemType Directory -Force $folder | Out-Null
+          Copy-Item -Recurse dist\curator_qt_smoke "$folder\Curator v2"
+          New-Item -ItemType Directory -Force qt_smoke_ci | Out-Null
+
+          function Invoke-QtSmoke($exe, $label) {
+            $dir = Split-Path $exe
+            $run = Start-Process -FilePath $exe -ArgumentList "--no-gui" -Wait -PassThru
+            Write-Host "===== $label (код $($run.ExitCode)) ====="
+            Get-Content -Encoding UTF8 "$dir\qt_smoke_report.txt"
+            foreach ($name in "qt_smoke_report.txt", "qt_smoke_light.png", "qt_smoke_dark.png") {
+              if (-not (Test-Path "$dir\$name")) { throw "${label}: нет $name" }
+              Move-Item "$dir\$name" "qt_smoke_ci\$label-$name"
+            }
+            if ($run.ExitCode -ne 0) { throw "${label}: smoke завершился с кодом $($run.ExitCode)" }
+          }
+
+          Invoke-QtSmoke "$folder\Curator v2\curator_qt_smoke.exe" "cyrillic"
+
+          New-SmbShare -Name curator_test -Path $folder -FullAccess Everyone | Out-Null
+          Invoke-QtSmoke "\\localhost\curator_test\Curator v2\curator_qt_smoke.exe" "unc"
+          Remove-SmbShare -Name curator_test -Force
 
       # Переменную CURATOR_VIPS_DIR здесь не сбрасываем: она нужна вспомогательным
       # скриптам на обычном Python. Собранный exe её игнорирует и берёт DLL
@@ -91,6 +128,9 @@ jobs:
           Copy-Item packaging\config.example.json dist\curator\
           Compress-Archive -Path dist\curator -DestinationPath curator-win7-x64.zip
           Compress-Archive -Path dist\curator_smoke -DestinationPath curator_smoke-win7-x64.zip
+          Copy-Item packaging\qt_smoke_icons\LICENSE.txt dist\curator_qt_smoke\LUCIDE-LICENSE.txt
+          Copy-Item THIRD_PARTY_LICENSES.txt dist\curator_qt_smoke\
+          Compress-Archive -Path dist\curator_qt_smoke -DestinationPath curator_qt_smoke-win7-x64.zip
 
       - uses: actions/upload-artifact@v4
         with:
@@ -101,3 +141,15 @@ jobs:
         with:
           name: curator_smoke-win7-x64
           path: curator_smoke-win7-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: curator_qt_smoke-win7-x64
+          path: curator_qt_smoke-win7-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: qt_smoke_ci_report
+          path: qt_smoke_ci
+          if-no-files-found: ignore
