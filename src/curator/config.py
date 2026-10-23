@@ -8,7 +8,7 @@ config.json лежит рядом с exe и правится вручную. О�
 import json
 import os
 from dataclasses import asdict, dataclass, field
-from typing import Tuple
+from typing import Optional, Tuple
 
 from curator.domain import folder_rules
 from curator.domain.errors import CuratorError
@@ -33,6 +33,11 @@ class Settings:
     log_level: str = "INFO"
     lock_stale_minutes: int = 10
     check_free_space: bool = True
+    # Совместная работа с версией 1 (ARCHITECTURE.md, 26.4, решение D23). Пустая строка и None —
+    # «не указано»: тогда обработка не запускается, чтобы версии 1 и 2 не взялись за одну папку.
+    # Относительные пути — от папки программы; "locks" и [] — версии 1 на этом диске нет.
+    locks_dir: str = ""
+    legacy_journal_dirs: Optional[Tuple[str, ...]] = None
 
     def __post_init__(self):
         if not 1 <= self.jpeg_quality <= 100:
@@ -50,6 +55,14 @@ class Settings:
             raise ConfigError("network_retry_delays_s: паузы не могут быть отрицательными")
         if self.lock_stale_minutes <= 0:
             raise ConfigError("lock_stale_minutes должен быть больше нуля")
+        if self.legacy_journal_dirs is not None and not all(
+                isinstance(item, str) and item for item in self.legacy_journal_dirs):
+            raise ConfigError("legacy_journal_dirs: ожидался список непустых путей")
+
+    @property
+    def shared_with_v1_configured(self):
+        """Указано ли явно, где блокировки и журналы версии 1 (или что её нет)."""
+        return bool(self.locks_dir) and self.legacy_journal_dirs is not None
 
     # ------------------------------------------------------------------ вывод
 
@@ -76,6 +89,9 @@ class Settings:
             "log_level": data["log_level"],
             "lock_stale_minutes": data["lock_stale_minutes"],
             "check_free_space": data["check_free_space"],
+            "locks_dir": data["locks_dir"] or None,
+            "legacy_journal_dirs": (list(data["legacy_journal_dirs"])
+                                    if data["legacy_journal_dirs"] is not None else None),
         }
 
     def save(self, path):
@@ -95,10 +111,13 @@ def from_dict(data):
         raise ConfigError("раздел tone должен быть объектом")
     unknown = set(data) - {"jpeg_quality", "tone", "folder_rules", "vips_concurrency",
                            "network_retry_delays_s", "log_level", "lock_stale_minutes",
-                           "check_free_space", "naming"}
+                           "check_free_space", "naming", "locks_dir", "legacy_journal_dirs"}
     if unknown:
         raise ConfigError("неизвестные настройки: {}".format(", ".join(sorted(unknown))))
     defaults = Settings()
+    legacy = data.get("legacy_journal_dirs")
+    if legacy is not None and not isinstance(legacy, list):
+        raise ConfigError("legacy_journal_dirs: ожидался список путей")
     try:
         return Settings(
             jpeg_quality=int(data.get("jpeg_quality", defaults.jpeg_quality)),
@@ -112,6 +131,8 @@ def from_dict(data):
             log_level=str(data.get("log_level", defaults.log_level)).upper(),
             lock_stale_minutes=int(data.get("lock_stale_minutes", defaults.lock_stale_minutes)),
             check_free_space=bool(data.get("check_free_space", defaults.check_free_space)),
+            locks_dir=str(data.get("locks_dir") or ""),
+            legacy_journal_dirs=tuple(legacy) if legacy is not None else None,
         )
     except (TypeError, ValueError) as exc:
         raise ConfigError("не удалось разобрать настройки: {}".format(exc)) from exc

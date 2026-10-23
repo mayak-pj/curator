@@ -54,3 +54,37 @@ def test_invalid_values_are_explained(data, expected):
 def test_settings_are_immutable():
     with pytest.raises(Exception):
         Settings().jpeg_quality = 50
+
+
+def test_shared_with_v1_is_not_configured_by_default():
+    assert not Settings().shared_with_v1_configured
+    assert not Settings(locks_dir="locks").shared_with_v1_configured
+    assert Settings(locks_dir="locks", legacy_journal_dirs=()).shared_with_v1_configured
+
+
+def test_shared_with_v1_paths_roundtrip(tmp_path):
+    path = str(tmp_path / "config.json")
+    settings = from_dict({"locks_dir": "\\\\srv\\Программы\\Curator\\locks",
+                          "legacy_journal_dirs": ["\\\\srv\\Программы\\Curator\\journal"]})
+    assert settings.shared_with_v1_configured
+    settings.save(path)
+    assert load(path) == settings
+    assert load(str(tmp_path / "нет.json")).legacy_journal_dirs is None
+
+
+@pytest.mark.parametrize("value", ["journal", [""], [1]])
+def test_legacy_journal_dirs_must_be_a_list_of_paths(value):
+    with pytest.raises(ConfigError) as error:
+        from_dict({"locks_dir": "locks", "legacy_journal_dirs": value})
+    assert "legacy_journal_dirs" in str(error.value)
+
+
+def test_shipped_example_config_points_to_version_1():
+    import os
+
+    example = os.path.join(os.path.dirname(__file__), "..", "..", "packaging", "config.example.json")
+    with open(example, encoding="utf-8") as stream:
+        settings = from_dict(json.load(stream))
+    assert settings.shared_with_v1_configured
+    assert settings.locks_dir.endswith("\\Curator\\locks")
+    assert [path.endswith("\\Curator\\journal") for path in settings.legacy_journal_dirs] == [True]

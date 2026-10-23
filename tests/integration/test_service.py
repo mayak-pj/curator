@@ -17,10 +17,15 @@ from curator.transaction import executor as executor_module
 pytestmark = pytest.mark.vips
 
 
+# Версии 1 на диске теста нет — это указано явно, как требует 26.4.
+STANDALONE = dict(locks_dir="locks", legacy_journal_dirs=())
+
+
 def make_service(tmp_path, on_event=None, **settings):
     paths = AppPaths(str(tmp_path / "программа"))
-    service = ProcessingService(settings=Settings(network_retry_delays_s=(0,), **settings),
-                                paths=paths, on_event=on_event)
+    options = dict(STANDALONE, network_retry_delays_s=(0,))
+    options.update(settings)
+    service = ProcessingService(settings=Settings(**options), paths=paths, on_event=on_event)
     return service
 
 
@@ -160,7 +165,7 @@ def test_recovery_of_a_previous_session_is_offered(tmp_path, monkeypatch):
     root = tree_with_two_folders(tmp_path)
     folder = os.path.join(root, "Объект 002")
     paths = AppPaths(str(tmp_path / "программа"))
-    first = ProcessingService(settings=Settings(network_retry_delays_s=(0,)), paths=paths)
+    first = ProcessingService(settings=Settings(network_retry_delays_s=(0,), **STANDALONE), paths=paths)
     real_remove = executor_module.os.remove
 
     original = os.path.join(folder, "1.tif")
@@ -176,7 +181,7 @@ def test_recovery_of_a_previous_session_is_offered(tmp_path, monkeypatch):
     first.start(root)
     monkeypatch.undo()
 
-    second = ProcessingService(settings=Settings(network_retry_delays_s=(0,)), paths=paths)
+    second = ProcessingService(settings=Settings(network_retry_delays_s=(0,), **STANDALONE), paths=paths)
     found = second.find_recovery()
 
     assert [item.folder for _, item in found] == [folder]

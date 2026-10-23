@@ -50,6 +50,10 @@ class AppPaths:
         """Последняя папка и тема окна — удобство, а не журнал: сохраняется best-effort."""
         return os.path.join(self.base, GUI_STATE_NAME)
 
+    def resolve(self, path):
+        """Путь из настроек: относительный — от папки программы, абсолютный и UNC — как есть."""
+        return os.path.abspath(os.path.join(self.base, path))
+
     @property
     def temp(self):
         """Локальные временные файлы: %TEMP%, а не сетевой диск."""
@@ -61,13 +65,13 @@ class AppPaths:
         for path in (self.journal, self.logs, self.locks, self.temp):
             try:
                 os.makedirs(path, exist_ok=True)
-                _probe(path)
+                probe_writable(path)
             except OSError as exc:
                 problems.append("{}: {}".format(path, exc))
         return problems
 
 
-def _probe(directory):
+def probe_writable(directory):
     probe = os.path.join(directory, ".write_probe")
     with open(probe, "w", encoding="utf-8") as stream:
         stream.write("ok")

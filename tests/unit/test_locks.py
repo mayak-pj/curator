@@ -90,3 +90,51 @@ def test_release_does_not_touch_someone_elses_lock(tmp_path):
 
     lock.release()
     assert os.path.exists(lock.path)
+
+
+V1_SAMPLE = os.path.join(os.path.dirname(__file__), "..", "data", "v1_lock_sample.json")
+
+
+def v1_sample():
+    """Файл блокировки версии 1 (снят кодом ветки v1; поля — как на Win7, путь — UNC)."""
+    with open(V1_SAMPLE, encoding="utf-8") as stream:
+        return json.load(stream)
+
+
+def test_lock_file_format_matches_version_1(tmp_path):
+    folder = str(tmp_path / "Объект 1")
+    lock = FolderLock(folder, str(tmp_path / "locks")).acquire()
+    try:
+        written = read_lock(lock.path)
+    finally:
+        lock.release()
+    sample = v1_sample()
+    assert sorted(written) == sorted(sample)
+    for key in sample:
+        assert type(written[key]) is type(sample[key]), key
+
+
+def test_lock_name_is_sha1_of_normalized_path_as_in_version_1():
+    import hashlib
+
+    sample = v1_sample()
+    expected = hashlib.sha1(sample["normalized"].encode("utf-8")).hexdigest() + ".lock"
+    assert expected == "aca0b0e28e5ebd5238f68274c56b42881ae490d7.lock"
+    if os.name == "nt":
+        assert normalize(sample["folder"]) == sample["normalized"]
+        assert lock_filename(sample["folder"]) == expected
+
+
+def test_version_1_lock_blocks_and_is_not_removed(tmp_path):
+    folder = str(tmp_path / "Объект 1")
+    directory = tmp_path / "locks"
+    directory.mkdir()
+    sample = dict(v1_sample(), folder=folder, normalized=normalize(folder),
+                  heartbeat=datetime.datetime.now().astimezone().isoformat(timespec="seconds"))
+    path = directory / lock_filename(folder)
+    path.write_text(json.dumps(sample, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(FolderLocked) as error:
+        FolderLock(folder, str(directory)).acquire()
+    assert "ivanov" in str(error.value) and "RENTGEN-PC" in str(error.value)
+    assert read_lock(str(path)) == sample

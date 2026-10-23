@@ -64,8 +64,43 @@ jobs:
           Get-Content -Encoding UTF8 dist\curator_smoke\smoke_report.txt
           Remove-Item dist\curator_smoke\smoke_report.txt
           if ($process.ExitCode -ne 0) { throw "smoke завершился с кодом $($process.ExitCode)" }
-          # Версия 1 не должна случайно потянуть Qt (requirements.txt общий).
-          if (Test-Path dist\curator\_internal\PyQt5) { throw "PyQt5 попал в сборку версии 1" }
+          # В main — версия 2 с окном на Qt; версия 1 (tkinter) собирается в ветке v1.
+          if (-not (Test-Path dist\curator\_internal\PyQt5)) { throw "PyQt5 нет в сборке версии 2" }
+          if (Test-Path dist\curator\_internal\tkinter) { throw "tkinter попал в сборку версии 2" }
+          if (-not (Test-Path dist\curator\_internal\curator\platform\assets\icons\LICENSE.txt)) { throw "нет иконок Lucide" }
+          $bytes = (Get-ChildItem -Recurse -File dist\curator | Measure-Object -Sum Length)
+          "Размер сборки curator: {0:N0} байт, файлов {1}" -f $bytes.Sum, $bytes.Count
+
+      # Этап 12 (ARCHITECTURE.md, 26.4): раскладка как на сервере — Программы\Curator\ (версия 1)
+      # и Программы\Curator v2\ с config.example.json; окно из русской папки и по UNC.
+      - name: Version 2 window next to version 1 (Cyrillic folder and UNC)
+        shell: pwsh
+        env:
+          CURATOR_VIPS_DIR: ""
+        run: |
+          $programs = Join-Path $PWD "build\Программы"
+          New-Item -ItemType Directory -Force "$programs\Curator\locks", "$programs\Curator\journal" | Out-Null
+          Copy-Item -Recurse dist\curator "$programs\Curator v2"
+          Copy-Item packaging\config.example.json "$programs\Curator v2\config.json"
+          New-Item -ItemType Directory -Force platform_ci | Out-Null
+
+          function Invoke-Snapshot($exe, $label) {
+            $out = Join-Path $PWD "platform_ci\$label"
+            $run = Start-Process -FilePath $exe -ArgumentList "--snapshot", $out -Wait -PassThru
+            Write-Host "===== $label (код $($run.ExitCode)) ====="
+            $report = Get-Content -Encoding UTF8 "$out\platform_check.txt"
+            $report
+            if ($run.ExitCode -ne 0) { throw "${label}: проверка окна завершилась с кодом $($run.ExitCode)" }
+            if (-not ($report -match "Модуль xray: готов")) { throw "${label}: не видны папки версии 1" }
+            foreach ($name in "start_light", "start_dark", "xray_light", "xray_dark") {
+              if (-not (Test-Path "$out\$name.png")) { throw "${label}: нет снимка $name" }
+            }
+          }
+
+          Invoke-Snapshot "$programs\Curator v2\curator.exe" "cyrillic"
+          New-SmbShare -Name curator_programs -Path $programs -FullAccess Everyone | Out-Null
+          Invoke-Snapshot "\\localhost\curator_programs\Curator v2\curator.exe" "unc"
+          Remove-SmbShare -Name curator_programs -Force
 
       # Этап 11 (ARCHITECTURE.md, 26.3): Qt из папки с русским именем и по сетевому пути UNC.
       - name: Qt smoke from Cyrillic folder and UNC path
@@ -104,19 +139,29 @@ jobs:
       - name: End-to-end run of the packaged application
         shell: pwsh
         run: |
+          # Без путей к версии 1 в config.json обработка не начинается (26.4) и папки не трогает.
+          python scripts/e2e_tree.py create build\e2e_refused
+          $refused = Start-Process -FilePath dist\curator\curator.exe -ArgumentList "process","build\e2e_refused" -Wait -PassThru
+          if ($refused.ExitCode -ne 2) { throw "без config.json ожидался код 2, получен $($refused.ExitCode)" }
+          python scripts/e2e_tree.py check build\e2e_refused --state original
+
+          # Дальше — копия из build\Программы\Curator v2 (предыдущий шаг): блокировки в папке версии 1.
+          $exe = "build\Программы\Curator v2\curator.exe"
           python scripts/e2e_tree.py create build\e2e
-          $run = Start-Process -FilePath dist\curator\curator.exe -ArgumentList "process","build\e2e" -Wait -PassThru
+          $run = Start-Process -FilePath $exe -ArgumentList "process","build\e2e" -Wait -PassThru
           if ($run.ExitCode -ne 0) { throw "обработка завершилась с кодом $($run.ExitCode)" }
           python scripts/e2e_tree.py check build\e2e --state processed
 
           python scripts/e2e_tree.py create build\e2e_rollback
-          $rollback = Start-Process -FilePath dist\curator\curator.exe -ArgumentList "process","build\e2e_rollback","--rollback-all" -Wait -PassThru
+          $rollback = Start-Process -FilePath $exe -ArgumentList "process","build\e2e_rollback","--rollback-all" -Wait -PassThru
           if ($rollback.ExitCode -ne 0) { throw "откат завершился с кодом $($rollback.ExitCode)" }
           python scripts/e2e_tree.py check build\e2e_rollback --state original
 
-          $scan = Start-Process -FilePath dist\curator\curator.exe -ArgumentList "scan","build\e2e","--json","build\scan.json" -Wait -PassThru
+          $scan = Start-Process -FilePath $exe -ArgumentList "scan","build\e2e","--json","build\scan.json" -Wait -PassThru
           if (-not (Test-Path build\scan.json)) { throw "scan не создал отчёт" }
-          Get-Content -Encoding UTF8 dist\curator\logs\*.log | Select-Object -Last 8
+          if (Get-ChildItem "build\Программы\Curator\locks") { throw "в папке блокировок версии 1 остались файлы" }
+          if (Get-ChildItem "build\Программы\Curator\journal") { throw "версия 2 писала в журнал версии 1" }
+          Get-Content -Encoding UTF8 "build\Программы\Curator v2\logs\*.log" | Select-Object -Last 8
 
       # ---------------------------------------------------------- упаковка
 
@@ -126,6 +171,9 @@ jobs:
           Remove-Item -Recurse -Force dist\curator\journal, dist\curator\logs, dist\curator\locks -ErrorAction SilentlyContinue
           Copy-Item README.md, TROUBLESHOOTING.md, THIRD_PARTY_LICENSES.txt dist\curator\
           Copy-Item packaging\config.example.json dist\curator\
+          # Готовый config.json: рядом с папкой Curator\ версии 1 программа работает сразу (26.4).
+          Copy-Item packaging\config.example.json dist\curator\config.json
+          Copy-Item src\curator\platform\assets\icons\LICENSE.txt dist\curator\LUCIDE-LICENSE.txt
           Compress-Archive -Path dist\curator -DestinationPath curator-win7-x64.zip
           Compress-Archive -Path dist\curator_smoke -DestinationPath curator_smoke-win7-x64.zip
           Copy-Item packaging\qt_smoke_icons\LICENSE.txt dist\curator_qt_smoke\LUCIDE-LICENSE.txt
@@ -146,6 +194,13 @@ jobs:
         with:
           name: curator_qt_smoke-win7-x64
           path: curator_qt_smoke-win7-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform_ci_report
+          path: platform_ci
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         if: always()

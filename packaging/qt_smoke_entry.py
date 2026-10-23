@@ -447,7 +447,7 @@ def main(argv=None):
     try:
         from PyQt5.QtWidgets import QApplication
 
-        app = QApplication(sys.argv[:1])
+        app = QApplication.instance() or QApplication(sys.argv[:1])  # в тестах окно Qt уже могло быть
         qt_checks(report, app)
         SmokeWindow = make_window_class()
         window = SmokeWindow(report)
