@@ -109,6 +109,22 @@ QLabel[role="badge"] { color: $text_muted; background: $surface_alt; border-radi
 QLabel[role="heading"] { font-size: 20px; font-weight: bold; }
 QLabel[muted="true"] { color: $text_muted; }
 QLabel[role="title"] { font-size: ${font_title}px; font-weight: bold; }
+
+QScrollArea#folderList { background: $surface; border: 1px solid $border; border-radius: ${radius_md}px; }
+QWidget#folderListInner { background: $surface; }
+QScrollArea#plainScroll { background: transparent; border: none; }
+QFrame#folderRow { background: $surface; border: none; border-bottom: 1px solid $border; }
+QFrame#folderRow[running="true"] { background: $accent_soft; }
+QFrame#rowIndicator { background: transparent; border: none; }
+QFrame#rowIndicator[running="true"] { background: $accent; }
+QLabel[role="rowTitle"] { font-weight: bold; background: transparent; }
+QLabel[tone] { background: transparent; }
+QLabel[tone="success"] { color: $success; }
+QLabel[tone="error"] { color: $danger; }
+QLabel[tone="warning"] { color: $warning; }
+QLabel[tone="neutral"] { color: $text_muted; }
+QLabel[tone="running"] { color: $accent; }
+QPlainTextEdit#errorLog { font-family: "Consolas", "Menlo", monospace; font-size: ${font_small}px; }
 """
 
 

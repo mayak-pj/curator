@@ -1,7 +1,7 @@
 import threading
 import time
 
-from curator.gui.bridge import TASK_DONE, TASK_FAILED, Worker
+from curator.platform.worker import TASK_DONE, TASK_FAILED, Worker
 
 
 class FakeScheduler:

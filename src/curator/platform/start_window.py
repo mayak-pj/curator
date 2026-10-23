@@ -86,8 +86,11 @@ class StartWindow(QMainWindow):
         super().__init__()
         self.context = context
         self.module_page = None
+        # Страница модуля создаётся один раз и живёт до закрытия окна: «Все задачи» во время
+        # обработки не должны обрывать работу и терять её состояние.
+        self.module_pages = {}
         self.setWindowTitle("{} {}".format(TITLE, __version__))
-        self.resize(980, 640)
+        self.resize(1000, 720)            # как окно версии 1: окну обработки нужен список папок
         self.setMinimumSize(QSize(860, 560))
 
         central = QWidget()
@@ -135,12 +138,11 @@ class StartWindow(QMainWindow):
     def open_module(self, module):
         if not module.available:
             return
-        page = module.open(self.context)
-        if self.module_page is not None:
-            self.stack.removeWidget(self.module_page)
-            self.module_page.deleteLater()
+        page = self.module_pages.get(module.id)
+        if page is None:
+            page = self.module_pages[module.id] = module.open(self.context)
+            self.stack.addWidget(page)
         self.module_page = page
-        self.stack.addWidget(page)
         self.stack.setCurrentWidget(page)
         self.title_label.setText(module.title)
         self.back_button.show()
@@ -150,6 +152,22 @@ class StartWindow(QMainWindow):
         self.stack.setCurrentWidget(self.start_page)
         self.title_label.setText("Curator")
         self.back_button.hide()
+
+    # -------------------------------------------------------------- закрытие
+
+    def closeEvent(self, event):
+        # Модуль может не отпустить окно: идёт обработка или результат не принят.
+        for page in self.module_pages.values():
+            if hasattr(page, "confirm_close") and not page.confirm_close():
+                event.ignore()
+                return
+        self.shutdown_modules()
+        event.accept()
+
+    def shutdown_modules(self):
+        for page in self.module_pages.values():
+            if hasattr(page, "shutdown"):
+                page.shutdown()
 
     # ------------------------------------------------------------------ тема
 
@@ -166,5 +184,6 @@ class StartWindow(QMainWindow):
         self.theme_button.setIcon(theme.icon("lightbulb-off" if dark else "lightbulb"))
         self.theme_button.setToolTip("Светлая тема" if dark else "Тёмная тема")
         self.start_page.refresh_theme(theme)
-        if self.module_page is not None and hasattr(self.module_page, "refresh_theme"):
-            self.module_page.refresh_theme(theme)
+        for page in self.module_pages.values():
+            if hasattr(page, "refresh_theme"):
+                page.refresh_theme(theme)

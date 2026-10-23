@@ -102,6 +102,27 @@ jobs:
           Invoke-Snapshot "\\localhost\curator_programs\Curator v2\curator.exe" "unc"
           Remove-SmbShare -Name curator_programs -Force
 
+      # Этап 13 (ARCHITECTURE.md, 26.5): окно обработки само нажимает свои кнопки на настоящих
+      # снимках — «Проверить» → «Начать обработку» → «Принять» и → «Откатить» + «Отменить всё»;
+      # результат на диске сверяет e2e_tree.py. Отчёты и снимки — в артефакте platform_ci_report.
+      - name: Processing window walks its buttons (accept and rollback)
+        shell: pwsh
+        run: |
+          $exe = "build\Программы\Curator v2\curator.exe"
+          foreach ($scenario in "accept", "rollback") {
+            $tree = "build\e2e_window_$scenario"
+            python scripts/e2e_tree.py create $tree
+            $out = Join-Path $PWD "platform_ci\xray_$scenario"
+            $run = Start-Process -FilePath $exe -ArgumentList "--selftest", $scenario, $tree, $out -Wait -PassThru
+            Write-Host "===== $scenario (код $($run.ExitCode)) ====="
+            Get-Content -Encoding UTF8 "$out\xray_selftest.txt"
+            if ($run.ExitCode -ne 0) { throw "${scenario}: окно обработки завершилось с кодом $($run.ExitCode)" }
+            $state = if ($scenario -eq "accept") { "processed" } else { "original" }
+            python scripts/e2e_tree.py check $tree --state $state
+            if ($LASTEXITCODE -ne 0) { throw "${scenario}: на диске не то, что показало окно" }
+          }
+          if (Get-ChildItem "build\Программы\Curator\locks") { throw "в папке блокировок версии 1 остались файлы" }
+
       # Этап 11 (ARCHITECTURE.md, 26.3): Qt из папки с русским именем и по сетевому пути UNC.
       - name: Qt smoke from Cyrillic folder and UNC path
         shell: pwsh

@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 from curator.app.service import FolderOutcome, SessionSummary
@@ -5,7 +7,7 @@ from curator.domain import states
 from curator.domain.folder_rules import classify
 from curator.domain.models import FolderSnapshot
 from curator.domain.naming import XrayNaming
-from curator.gui import status as gui_status
+from curator.modules.xray import status as gui_status
 from curator.transaction.planner import plan_folder
 from curator.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK
 
@@ -121,3 +123,37 @@ def test_progress_line_reflects_progress_within_the_current_file():
 def test_progress_line_has_no_estimate_once_finished():
     line = gui_status.progress_line(10, 10, fraction=1.0, elapsed_seconds=100)
     assert line == "Готово файлов: 10 из 10 · 100 %"
+
+
+def test_session_progress_counts_current_file_and_never_goes_back():
+    clock = [100.0]
+    progress = gui_status.SessionProgress(clock=lambda: clock[0])
+    progress.start(4)
+    progress.file_started()
+    progress.stage(states.STAGED, 1.0)
+    progress.stage("encode", 0.5)                 # histogram и encode — один шаг «convert»
+    assert progress.value == pytest.approx(0.35 + 0.05)
+    progress.stage(states.STAGED, 0.0)            # повтор сетевого шага после сбоя
+    assert progress.value == pytest.approx(0.40)
+    progress.file_prepared()
+    assert progress.value == pytest.approx(1.0) and progress.done_files == 1
+    clock[0] += 60
+    assert progress.line() == "Готово файлов: 1 из 4 · 25 % · осталось ~3 мин"
+
+
+def test_session_progress_without_files_does_not_divide_by_zero():
+    progress = gui_status.SessionProgress()
+    progress.start(0)
+    assert progress.fraction == 0 and "0 %" in progress.line()
+
+
+def test_stage_line_names_the_move_to_archive():
+    assert gui_status.stage_line(3, states.SOURCE_COPIED, 0.42) == "Файл #3: перенос оригинала в архив 42 %"
+    assert set(gui_status.STAGE_WEIGHTS) == {gui_status.progress_bucket(stage) for stage in gui_status.STAGE_LABELS}
+    assert sum(gui_status.STAGE_WEIGHTS.values()) == pytest.approx(1.0)
+
+
+def test_display_name_is_relative_to_root_and_never_a_dot():
+    root = os.path.join("Z:", "Объект")
+    assert gui_status.display_name(os.path.join(root, "Шов 1"), root) == "Шов 1"
+    assert gui_status.display_name(root, root) == "Объект"
