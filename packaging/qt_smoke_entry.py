@@ -87,6 +87,9 @@ def process_age():
 
     kernel32 = ctypes.WinDLL("kernel32")
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
     times = [wintypes.FILETIME() for _ in range(4)]
     if not kernel32.GetProcessTimes(kernel32.GetCurrentProcess(), *[ctypes.byref(item) for item in times]):
         return None
@@ -95,7 +98,10 @@ def process_age():
 
 
 def startup_seconds():
-    age = process_age()
+    try:
+        age = process_age()
+    except Exception:
+        age = None
     return age if age is not None else time.monotonic() - STARTED
 
 
