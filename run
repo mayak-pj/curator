@@ -1,0 +1,9 @@
+#!/bin/sh
+# Запуск на macOS: ./run — окно, ./run scan ПАПКА / ./run process ПАПКА — консоль.
+# TCL_LIBRARY/TK_LIBRARY нужны, потому что Python из uv не находит свой Tcl/Tk.
+cd "$(dirname "$0")" || exit 1
+PY_HOME=$(.venv/bin/python -c "import sys; print(sys.base_prefix)") || exit 1
+export TCL_LIBRARY="$PY_HOME/lib/tcl8.6"
+export TK_LIBRARY="$PY_HOME/lib/tk8.6"
+export PYTHONPATH=src
+exec .venv/bin/python -m curator "$@"
