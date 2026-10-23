@@ -150,11 +150,19 @@ def prepare_qt(report):
         QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 
 
+def qt_translations_dir():
+    """Переводы Qt внутри пакета PyQt5. QLibraryInfo.TranslationsPath из папки с русскими буквами
+    возвращает путь с «?» вместо букв (CI, 23.10.2026) — поэтому, как и плагины, путь задаём сами."""
+    import PyQt5
+
+    return os.path.join(os.path.dirname(os.path.abspath(PyQt5.__file__)), "Qt5", "translations")
+
+
 def install_russian(app):
-    from PyQt5.QtCore import QLibraryInfo, QLocale, QTranslator
+    from PyQt5.QtCore import QLocale, QTranslator
 
     translator = QTranslator(app)
-    folder = QLibraryInfo.location(QLibraryInfo.TranslationsPath)
+    folder = qt_translations_dir()
     if not translator.load(QLocale("ru_RU"), "qtbase", "_", folder):
         raise RuntimeError("qtbase_ru.qm не найден в {}".format(folder))
     app.installTranslator(translator)
@@ -246,10 +254,7 @@ def qt_checks(report, app):
     check(report, "SVG (QtSvg)", check_svg)
     check(report, "SVG через QIcon", check_icon_engine)
     check(report, "Форматы изображений Qt", check_image_formats)
-    try:
-        report.add("OK", "Русские подписи Qt", install_russian(app))
-    except Exception as exc:
-        report.add("WARN", "Русские подписи Qt", str(exc))
+    check(report, "Русские подписи Qt", lambda: install_russian(app))
 
 
 def save_snapshot(widget, name):

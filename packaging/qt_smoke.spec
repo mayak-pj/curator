@@ -33,12 +33,27 @@ def _is_system_crt(entry):
     return name == "ucrtbase.dll" or name.startswith("api-ms-win-")
 
 
-def _is_software_opengl(entry):
-    """opengl32sw.dll (Mesa, ~20 МБ) — запасной OpenGL для QtQuick/QOpenGLWidget; окну на виджетах не нужен."""
-    return os.path.basename(entry[0]).lower() == "opengl32sw.dll"
+# Не нужны окну на виджетах (~33 МБ): opengl32sw.dll — запасной OpenGL (Mesa) для QtQuick/QOpenGLWidget;
+# qwebgl.dll — показ окна в браузере, тянет за собой Quick/Qml/Network/WebSockets.
+# Если что-то из этого всё же понадобится, check_pe_imports.py в CI сообщит о недостающей DLL.
+UNUSED_QT = {
+    "opengl32sw.dll", "qwebgl.dll", "qt5quick.dll", "qt5qml.dll", "qt5qmlmodels.dll", "qt5network.dll",
+    "qt5websockets.dll",
+}
 
 
-a.binaries = [entry for entry in a.binaries if not (_is_system_crt(entry) or _is_software_opengl(entry))]
+def _is_unused_qt(entry):
+    return os.path.basename(entry[0]).lower() in UNUSED_QT
+
+
+def _is_foreign_translation(entry):
+    """Из переводов Qt нужны только русские (подписи стандартных кнопок)."""
+    path = entry[0].replace("\\", "/")
+    return "/translations/" in path and path.endswith(".qm") and "_ru." not in os.path.basename(path)
+
+
+a.binaries = [entry for entry in a.binaries if not (_is_system_crt(entry) or _is_unused_qt(entry))]
+a.datas = [entry for entry in a.datas if not _is_foreign_translation(entry)]
 
 pyz = PYZ(a.pure)
 exe = EXE(
