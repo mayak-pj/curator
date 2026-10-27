@@ -78,6 +78,7 @@ class XrayPage(QWidget):
         self.notices = []          # сообщения, которые без человека не показываются окном (selftest)
 
         self.service, service_error = service, None
+        self._service_error = None
         if self.service is None:
             try:
                 self.service = service_module.ProcessingService(on_event=self.worker.post, paths=context.paths)
@@ -85,6 +86,7 @@ class XrayPage(QWidget):
                 service_error = str(exc)
         self.ready, self.lines = readiness(context.paths)
         if service_error:
+            self._service_error = service_error
             self.ready, self.lines = False, ["Сервис обработки не запущен: {}".format(service_error)] + self.lines
 
         self._build()
@@ -198,6 +200,13 @@ class XrayPage(QWidget):
             total = sum(self.splitter.sizes())
             self.splitter.setSizes([max(total - ERRORS_HEIGHT, 1), ERRORS_HEIGHT])
 
+    def _refresh_readiness(self):
+        """Пересчёт готовности перед проверкой и обработкой: положение дел могло измениться с открытия окна."""
+        if self._service_error:
+            return
+        self.ready, self.lines = readiness(self.context.paths)
+        self._show_readiness()
+
     def _show_readiness(self):
         # Всё в порядке — карточку не показываем; при проблеме она объясняет, почему обработка недоступна.
         self.card.setVisible(not self.ready)
@@ -223,6 +232,7 @@ class XrayPage(QWidget):
             self.current_label.setText("Папка выбрана. «Проверить» покажет план, ничего не меняя.")
 
     def _scan(self):
+        self._refresh_readiness()
         root = self._selected_root()
         if not root:
             return
@@ -232,6 +242,7 @@ class XrayPage(QWidget):
         self.worker.submit("scan", self.service.scan, root)
 
     def _start(self):
+        self._refresh_readiness()
         root = self._selected_root()
         if not root:
             return

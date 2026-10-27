@@ -127,6 +127,18 @@ def test_page_without_settings_shows_why_and_still_scans(tmp_path, offscreen):
     window.close()
 
 
+def test_readiness_card_is_recomputed_when_the_problem_goes_away(tmp_path, offscreen):
+    paths = program(tmp_path, config={"locks_dir": "../Curator/locks", "legacy_journal_dirs": ["../Curator/journal"]})
+    qt_app, window, page = open_page(paths)
+    assert not page.ready and not page.card.isHidden()
+    legacy = tmp_path / "Программы" / "Curator"
+    (legacy / "locks").mkdir(parents=True)
+    (legacy / "journal").mkdir()
+    page.scan_button.click()
+    assert page.ready and page.card.isHidden()
+    window.close()
+
+
 def test_closing_during_processing_asks_and_cancels(tmp_path, offscreen, monkeypatch):
     import threading
 
