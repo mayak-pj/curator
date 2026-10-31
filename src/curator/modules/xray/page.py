@@ -370,7 +370,7 @@ class XrayPage(QWidget):
         folder = event["folder"]
         text, colour = status_module.rollback_status(event["state"], event.get("warnings", ()))
         # «Отменить всё» проходит и по уже откатанным папкам: «откатывать нечего» не должно
-        # затирать у них «откат выполнен».
+        # затирать у них «возвращена в исходное состояние».
         if not (event["state"] == NOTHING and folder in self._rolled_back):
             self.folders.set_status(folder, text, colour)
         if event["state"] == ROLLED_BACK:
@@ -395,7 +395,8 @@ class XrayPage(QWidget):
         elif tag == "scan":
             self.status_label.setText("Проверка завершена, на диске ничего не изменилось")
         elif tag in ("rollback", "rollback_all"):
-            self.status_label.setText("Откат завершён")
+            self.status_label.setText("Все папки возвращены в исходное состояние" if tag == "rollback_all"
+                                      else "Папка возвращена в исходное состояние")
             if tag == "rollback_all":
                 self.processed_folders = []
                 self.folders.disable_all_rollback()

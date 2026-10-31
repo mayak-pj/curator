@@ -189,7 +189,7 @@ def test_automatic_rollback_is_not_offered_again_and_errors_are_not_doubled(tmp_
         post(ev.event(ev.FOLDER_FINISHED, folder=failed, state=states.FOLDER_FAILED, error="нет места"))
     page._idle()
 
-    assert page.folders.rows[broken].status.text() == "ошибка, откат выполнен: сеть"
+    assert page.folders.rows[broken].status.text() == "ошибка, папка возвращена в исходное состояние: сеть"
     assert not page.folders.rows[broken].button.isEnabled() and page.processed_folders == []
     assert page.errors.text().count("нет места") == 1
     assert not page.accept_button.isEnabled()

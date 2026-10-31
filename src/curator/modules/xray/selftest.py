@@ -106,10 +106,10 @@ def run(window, scenario, root, out_dir, lines):
     else:
         first = done_rows[0]
         step("Откатить «{}»".format(first.name.text()), first.button)
-        if first.status.text() != "откат выполнен" or first.button.isEnabled():
+        if first.status.text() != "возвращена в исходное состояние" or first.button.isEnabled():
             problems.append("после «Откатить» у папки «{}»: {}".format(first.name.text(), first.status.text()))
         step("Отменить всё", page.rollback_all_button)
-        if any(row.status.text() != "откат выполнен" for row in done_rows):
+        if any(row.status.text() != "возвращена в исходное состояние" for row in done_rows):
             problems.append("после «Отменить всё» не все папки откатаны")
         if page.accept_button.isEnabled() or page.rollback_all_button.isEnabled():
             problems.append("после «Отменить всё» кнопки «Принять» / «Отменить всё» доступны")

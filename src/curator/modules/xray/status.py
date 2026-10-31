@@ -94,7 +94,7 @@ def folder_status(state, error=None, rolled_back=False):
         return ("остановлено, папка не изменена", WARNING)
     if state == states.FOLDER_ROLLBACK_REQUIRED:
         if rolled_back:
-            return ("ошибка, откат выполнен: {}".format(error or ""), WARNING)
+            return ("ошибка, папка возвращена в исходное состояние: {}".format(error or ""), WARNING)
         return ("ошибка, нужен откат: {}".format(error or ""), ERROR)
     if state == states.FOLDER_FAILED:
         return ("ошибка, папка не изменена: {}".format(error or ""), ERROR)
@@ -103,7 +103,7 @@ def folder_status(state, error=None, rolled_back=False):
 
 def rollback_status(state, warnings=()):
     if state == ROLLED_BACK:
-        return ("откат выполнен", NEUTRAL)
+        return ("возвращена в исходное состояние", NEUTRAL)
     if state == NOTHING:
         return ("откатывать нечего", NEUTRAL)
     if state == PARTIAL:

@@ -58,7 +58,7 @@ def test_rollback_required_turns_amber_once_rolled_back():
     assert gui_status.folder_status(states.FOLDER_ROLLBACK_REQUIRED, "сбой")[1] == gui_status.ERROR
     text, colour = gui_status.folder_status(states.FOLDER_ROLLBACK_REQUIRED, "сбой", rolled_back=True)
     assert colour == gui_status.WARNING
-    assert "откат выполнен" in text
+    assert "возвращена в исходное состояние" in text
 
 
 def test_rollback_offered_only_where_disk_changed():
@@ -69,7 +69,7 @@ def test_rollback_offered_only_where_disk_changed():
 
 
 def test_rollback_statuses():
-    assert gui_status.rollback_status(ROLLED_BACK)[0] == "откат выполнен"
+    assert gui_status.rollback_status(ROLLED_BACK)[0] == "возвращена в исходное состояние"
     assert gui_status.rollback_status(NOTHING)[0] == "откатывать нечего"
     text, colour = gui_status.rollback_status(PARTIAL, ["JPEG изменён"])
     assert colour == gui_status.WARNING and "JPEG изменён" in text
