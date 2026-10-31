@@ -109,8 +109,9 @@ def cmd_process(args):
 
     service = ProcessingService(on_event=show)
     summary = service.start(args.root)
-    print("\nУспешно {}, с ошибками {}, пропущено занятых {}, файлов обработано {}, за {} с".format(
-        len(summary.succeeded), len(summary.failed), summary.skipped_locked, summary.files, summary.seconds))
+    print("\nУспешно {}, с ошибками {}, остановлено {}, пропущено занятых {}, файлов обработано {}, за {} с".format(
+        len(summary.succeeded), len(summary.failed), len(summary.stopped), summary.skipped_locked,
+        summary.files, summary.seconds))
     for outcome in summary.failed:
         print("  {} — {}{}".format(outcome.folder, outcome.error,
                                    " (откат выполнен)" if outcome.rolled_back else ""))

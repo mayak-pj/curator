@@ -8,6 +8,7 @@
 """
 
 import os
+from types import SimpleNamespace
 
 from PyQt5.QtCore import Qt, QTimer, QUrl
 from PyQt5.QtGui import QDesktopServices
@@ -19,8 +20,11 @@ from PyQt5.QtWidgets import (
 from curator import config
 from curator.app import events as ev
 from curator.app import service as service_module
+from curator.domain import states
 from curator.domain.errors import CuratorError
+from curator.domain.ordering import natural_key
 from curator.modules.xray import status as status_module
+from curator.modules.xray.flow import FileFlow
 from curator.modules.xray.widgets import ErrorPanel, FolderList, RecoveryDialog, set_property
 from curator.platform import state
 from curator.platform.worker import TASK_DONE, TASK_FAILED, Worker
@@ -70,6 +74,8 @@ class XrayPage(QWidget):
         self.scan_result = None
         self.summary = None
         self.processed_folders = []
+        self.empty_folders = []
+        self._leaves = []
         self._finished_status = {}
         self._rolled_back = set()
         self.progress_model = status_module.SessionProgress()
@@ -170,8 +176,16 @@ class XrayPage(QWidget):
         splitter = self.splitter = QSplitter(Qt.Vertical)
         splitter.setChildrenCollapsible(False)
         self.folders = FolderList(on_rollback=self._rollback_folder)
+        self.flow = FileFlow(enabled=state.load(self.context.paths.gui_state).get("show_flow", True),
+                             on_toggle=lambda checked: state.save(self.context.paths.gui_state, show_flow=checked))
         self.errors = ErrorPanel()
-        splitter.addWidget(self.folders)
+        lists = QSplitter(Qt.Horizontal)
+        lists.setChildrenCollapsible(False)
+        lists.addWidget(self.folders)
+        lists.addWidget(self.flow)
+        lists.setStretchFactor(0, 1)
+        lists.setStretchFactor(1, 2)
+        splitter.addWidget(lists)
         splitter.addWidget(self.errors)
         splitter.setStretchFactor(0, 1)
         splitter.setStretchFactor(1, 0)
@@ -222,6 +236,7 @@ class XrayPage(QWidget):
         self.status_icon.setPixmap(theme.pixmap(name, color, 20))
         self.browse_button.setIcon(theme.icon("folder-open"))
         self.errors.refresh_theme(theme)
+        self.flow.refresh_theme(theme)
 
     # -------------------------------------------------------------- команды
 
@@ -237,9 +252,10 @@ class XrayPage(QWidget):
         if not root:
             return
         self.folders.clear()
+        self.flow.clear()
         self.errors.clear()
         self._busy("Проверка папок…")
-        self.worker.submit("scan", self.service.scan, root)
+        self.worker.submit("scan", self._scan_task, root)
 
     def _start(self):
         self._refresh_readiness()
@@ -252,34 +268,42 @@ class XrayPage(QWidget):
         self._rolled_back = set()
         self._busy("Обработка…")
         self.stop_button.setEnabled(True)
-        self.worker.submit("start", self.service.start, root)
+        self.worker.submit("start", self._start_task, root)
+
+    def _scan_task(self, root):
+        self._leaves = status_module.leaf_folders(root)
+        return self.service.scan(root)
+
+    def _start_task(self, root):
+        self._leaves = status_module.leaf_folders(root)
+        return self.service.start(root)
 
     def _stop(self):
         self.service.cancel()
         self.stop_button.setEnabled(False)
-        self.status_label.setText("Остановка после текущего файла…")
+        self._say("Остановка после текущего файла…")
 
     def _rollback_folder(self, folder):
-        if not self.confirm("Откатить папку",
+        if not self.confirm("Отменить обработку папки",
                             "Вернуть папку в состояние до обработки?\n\n{}\n\n"
                             "Изменённые вами файлы удалены не будут.".format(folder)):
             return
-        self._busy("Откат папки…")
+        self._busy("Возвращаю папку в исходное состояние…")
         self.worker.submit("rollback", self.service.rollback_folder, folder)
 
     def _rollback_all(self):
         if not self.confirm("Отменить всё", "Вернуть все обработанные папки в исходное состояние?"):
             return
-        self._busy("Откат всех папок…")
+        self._busy("Возвращаю все папки в исходное состояние…")
         self.worker.submit("rollback_all", self.service.rollback_all)
 
     def _accept(self):
         self.service.accept()
         self.processed_folders = []      # сессия закрыта: откатывать больше нечего
-        self.folders.disable_all_rollback()
+        self.folders.disable_all_rollback(hide=True)
         self.accept_button.setEnabled(False)
         self.rollback_all_button.setEnabled(False)
-        self.status_label.setText("Результат принят. Журнал сохранён в папке программы.")
+        self._say("Результат принят. Журнал сохранён в папке программы.")
 
     def _open_app_dir(self):
         QDesktopServices.openUrl(QUrl.fromLocalFile(self.context.paths.base))
@@ -297,7 +321,9 @@ class XrayPage(QWidget):
             self._current_folder_files = event["files"]
             self.folders.set_status(event["folder"], *status_module.folder_status("running"))
             self.folders.show_folder(event["folder"])
+            self.flow.folder_started(event["folder"])
         elif kind == ev.FOLDER_FINISHED:
+            self.flow.folder_finished()
             self._on_folder_finished(event)
         elif kind == ev.FOLDER_SKIPPED:
             self.folders.set_status(event["folder"], "пропущена: занята другим пользователем", status_module.WARNING)
@@ -306,21 +332,26 @@ class XrayPage(QWidget):
             # Строка папки и строка под полосой берут номер файла из одного и того
             # же события — иначе они на время расходятся (my_reports, 01.10.2026).
             self.progress_model.file_started()
+            self.flow.file_started(event.get("index"))
             self.stage_label.setText("")
             if event.get("folder") == self._current_folder and self._current_folder_files:
                 self.folders.set_status(self._current_folder, *status_module.folder_progress(
                     event.get("index", 0), self._current_folder_files))
         elif kind == ev.FILE_PREPARED:
             self.progress_model.file_prepared()
+            self.flow.file_prepared(event.get("index"))
             self.stage_label.setText("")
             self._update_progress()
+        elif kind == ev.FILE_COMPLETED:
+            self.flow.file_completed(event.get("index"))
         elif kind == ev.PROGRESS and event.get("stage") in status_module.STAGE_LABELS:
             fraction = event.get("fraction", 0)
             self.progress_model.stage(event["stage"], fraction)
+            self.flow.stage(event.get("index"), event["stage"], fraction)
             self.stage_label.setText(status_module.stage_line(event.get("index", "?"), event["stage"], fraction))
             self._update_progress()
         elif kind == ev.PROGRESS and event.get("stage") == "scan":
-            self.status_label.setText("Просмотр: {}".format(event["folder"]))
+            self._say("Просмотр: {}".format(event["folder"]))
         elif kind == ev.RETRY:
             self.errors.add("повтор {}: попытка {}, пауза {} с — {}".format(
                 event["operation"], event["attempt"], event["delay"], event["error"]), "warning")
@@ -337,12 +368,25 @@ class XrayPage(QWidget):
 
     def _on_scan_finished(self, result):
         self.scan_result = result
-        plans = [plan for plan in result.plans if plan.decision.kind != "empty"]
+        self.flow.set_plans(result.plans)
+        known = {plan.folder for plan in result.plans}
+        empty = [SimpleNamespace(folder=folder, decision=SimpleNamespace(kind="empty"), problems=())
+                 for folder in self._leaves if folder not in known]
+        # Сначала папки к обработке — в том порядке, в котором они пойдут в работу, потом остальные.
+        processing = result.to_process
+        others = sorted([plan for plan in result.plans if plan.decision.kind != "empty" and plan not in processing]
+                        + empty, key=lambda plan: natural_key(plan.folder))
+        plans = processing + others
         self.folders.set_folders(plans, result.root, status_module.initial_status)
-        self.current_label.setText(
-            "К обработке {} файлов в {} папках · уже готовых {} · конфликтов {}".format(
-                result.total_files, len(result.to_process),
-                len(result.by_kind("done")), len(result.by_kind("conflict"))))
+        text = "К обработке {} файлов в {} папках · уже готовых {} · конфликтов {}".format(
+            result.total_files, len(result.to_process),
+            len(result.by_kind("done")), len(result.by_kind("conflict")))
+        if empty:
+            text += " · папок без снимков {}".format(len(empty))
+        self.current_label.setText(text)
+        self.empty_folders = [plan.folder for plan in empty]
+        for plan in empty:
+            self.errors.add(status_module.NO_IMAGES, "warning", plan.folder)
 
     def _on_session_started(self, event):
         self.progress_model.start(event.get("files", 0))
@@ -363,15 +407,17 @@ class XrayPage(QWidget):
                 and folder not in self.processed_folders:
             self.folders.set_rollback_enabled(folder, True)
             self.processed_folders.append(folder)
-        if colour in (status_module.ERROR, status_module.WARNING) and not repeated:
+        # Остановка пользователем — не ошибка и не предупреждение: в панель ошибок не попадает.
+        if colour in (status_module.ERROR, status_module.WARNING) and not repeated \
+                and event["state"] != states.FOLDER_CANCELLED:
             self.errors.add(text, "error" if colour == status_module.ERROR else "warning", folder)
 
     def _on_rollback_finished(self, event):
         folder = event["folder"]
         text, colour = status_module.rollback_status(event["state"], event.get("warnings", ()))
-        # «Отменить всё» проходит и по уже откатанным папкам: «откатывать нечего» не должно
-        # затирать у них «возвращена в исходное состояние».
-        if not (event["state"] == NOTHING and folder in self._rolled_back):
+        # «Отменить всё» проходит и по папкам, где менять нечего (остановленные, уже возвращённые):
+        # их прежний статус («остановлено, папка не изменена», «возвращена…») не затираем.
+        if event["state"] != NOTHING:
             self.folders.set_status(folder, text, colour)
         if event["state"] == ROLLED_BACK:
             self._rolled_back.add(folder)
@@ -388,24 +434,28 @@ class XrayPage(QWidget):
         self._idle()
         if tag == "start":
             self.summary = event["result"]
-            self.current_label.setText(status_module.summary_line(self.summary))
+            line = status_module.summary_line(self.summary)
+            if self.empty_folders:
+                line += " · папок без TIFF {} (см. список)".format(len(self.empty_folders))
+            self.current_label.setText(line)
             self.stage_label.setText("")
             self.progress.setValue(PROGRESS_STEPS)
-            self.status_label.setText("Обработка завершена. Проверьте результат и нажмите «Принять» или «Отменить всё».")
+            self._say("Обработка завершена. Проверьте результат и нажмите «Принять» или «Отменить всё».")
         elif tag == "scan":
-            self.status_label.setText("Проверка завершена, на диске ничего не изменилось")
+            self._say("Проверка завершена, на диске ничего не изменилось")
         elif tag in ("rollback", "rollback_all"):
-            self.status_label.setText("Все папки возвращены в исходное состояние" if tag == "rollback_all"
-                                      else "Папка возвращена в исходное состояние")
+            self._say("Все папки возвращены в исходное состояние" if tag == "rollback_all"
+                      else "Папка возвращена в исходное состояние",
+                      status_module.ERROR if tag == "rollback_all" else None)
             if tag == "rollback_all":
                 self.processed_folders = []
-                self.folders.disable_all_rollback()
+                self.folders.disable_all_rollback(hide=True)
                 self.rollback_all_button.setEnabled(False)
                 self.accept_button.setEnabled(False)
         elif tag == "recovery":
             self._show_recovery(event["result"])
         elif tag == "recover_apply":
-            self.status_label.setText("Восстановление выполнено")
+            self._say("Восстановление выполнено")
 
     def _on_task_failed(self, event):
         self._idle()
@@ -413,7 +463,7 @@ class XrayPage(QWidget):
         message = str(error) if isinstance(error, CuratorError) else "{}: {}".format(
             error.__class__.__name__, error)
         self.errors.add(message, "error")
-        self.status_label.setText("Ошибка")
+        self._say("Ошибка")
         self.notify(QMessageBox.Critical, "Ошибка", message)
 
     # --------------------------------------------------------- восстановление
@@ -455,12 +505,12 @@ class XrayPage(QWidget):
         if self.worker.busy:
             if self.confirm("Работа не завершена", "Обработка ещё идёт. Остановить её и закрыть программу?"):
                 self.service.cancel()
-                self.status_label.setText("Остановка после текущего файла… Окно можно будет закрыть после остановки.")
+                self._say("Остановка после текущего файла… Окно можно будет закрыть после остановки.")
             return False
         if self.processed_folders and self.accept_button.isEnabled():
             return self.confirm("Результат не принят",
                                 "Есть обработанные папки, результат не принят.\n"
-                                "Закрыть программу? Откат останется доступен через журнал.")
+                                "Закрыть программу? Отмена останется доступна через журнал.")
         return True
 
     def shutdown(self):
@@ -478,8 +528,13 @@ class XrayPage(QWidget):
         state.save(self.context.paths.gui_state, last_root=root)
         return root
 
+    def _say(self, text, tone=None):
+        """Строка состояния внизу; tone — цвет для сообщений, которые нельзя пропустить (откат всего)."""
+        self.status_label.setText(text)
+        set_property(self.status_label, "tone", tone or status_module.NEUTRAL)
+
     def _busy(self, message):
-        self.status_label.setText(message)
+        self._say(message)
         for button in (self.scan_button, self.start_button, self.accept_button, self.rollback_all_button):
             button.setEnabled(False)
         self.folders.disable_all_rollback()

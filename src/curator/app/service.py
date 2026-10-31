@@ -58,8 +58,13 @@ class SessionSummary:
         return [outcome for outcome in self.outcomes if outcome.ok]
 
     @property
+    def stopped(self):
+        """Папки, остановленные пользователем: не ошибка, папка не изменена."""
+        return [outcome for outcome in self.outcomes if outcome.state == states.FOLDER_CANCELLED]
+
+    @property
     def failed(self):
-        return [outcome for outcome in self.outcomes if not outcome.ok]
+        return [outcome for outcome in self.outcomes if not outcome.ok and outcome.state != states.FOLDER_CANCELLED]
 
     @property
     def files(self):
@@ -218,8 +223,10 @@ class ProcessingService:
                 summary.skipped_locked += 1
 
         summary.seconds = round(time.monotonic() - started, 2)
-        self.logger.info("Обработка завершена: успешно %s, с ошибками %s, пропущено занятых %s, за %s с",
-                         len(summary.succeeded), len(summary.failed), summary.skipped_locked, summary.seconds)
+        self.logger.info("Обработка завершена: успешно %s, с ошибками %s, остановлено пользователем %s, "
+                         "пропущено занятых %s, за %s с",
+                         len(summary.succeeded), len(summary.failed), len(summary.stopped),
+                         summary.skipped_locked, summary.seconds)
         self._emit(ev.SESSION_FINISHED, summary=summary)
         return summary
 
@@ -262,6 +269,8 @@ class ProcessingService:
             rolled = self.rollback_folder(plan.folder)
             outcome.rolled_back = rolled.state == ROLLED_BACK
             outcome.warnings = list(rolled.warnings)
+        elif result.state == states.FOLDER_CANCELLED:
+            self.logger.info("Папка %s: остановлено пользователем, папка не изменена", plan.folder)
         elif result.state != states.FOLDER_DONE:
             self._problem("Папка %s: %s", plan.folder, result.error or result.state, folder=plan.folder)
         else:

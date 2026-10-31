@@ -143,7 +143,9 @@ def test_folder_unfinished_in_version_1_is_left_to_version_1(tmp_path, monkeypat
     service.accept()
 
     assert listing(folder) == left_by_v1
-    assert [outcome.folder for outcome in summary.succeeded] == [os.path.join(root, "Объект 002")]
+    # Версия 1 обработала меньшую папку (002) до обрыва в 001, поэтому версии 2 делать нечего:
+    # 001 оставлена версии 1, 002 уже готова.
+    assert summary.succeeded == [] and summary.done_folders == 1
     assert not service.find_recovery()  # чужие незавершённые папки версия 2 не восстанавливает
 
 

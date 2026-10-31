@@ -28,7 +28,11 @@ class ScanResult:
 
     @property
     def to_process(self):
-        return [plan for plan in self.plans if plan.ok]
+        """Папки к обработке — по возрастанию числа файлов (при равенстве — в порядке обхода).
+
+        Папки независимы друг от друга, поэтому порядок безопасен; мелкие первыми — чтобы
+        ход обработки на экране набирал размах. Откат идёт в обратном порядке."""
+        return sorted((plan for plan in self.plans if plan.ok), key=lambda plan: len(plan.files))
 
     @property
     def blocked(self):

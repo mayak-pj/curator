@@ -55,8 +55,9 @@ class FolderRow(QFrame):
         self.status.setWordWrap(True)
         layout.addWidget(self.status, 1, 1)
         layout.setColumnStretch(1, 1)
-        self.button = QPushButton("Откатить")
+        self.button = QPushButton("Отменить")
         self.button.setEnabled(False)
+        self.button.setVisible(False)       # кнопка есть только там, где откат возможен
         self.button.clicked.connect(on_rollback)
         layout.addWidget(self.button, 0, 2, 2, 1, Qt.AlignVCenter)
         self.running = False
@@ -72,7 +73,7 @@ class FolderRow(QFrame):
 
 
 class FolderList(QScrollArea):
-    """Список папок: путь, статус цветом и кнопка «Откатить» у каждой строки."""
+    """Список папок: путь, статус цветом и кнопка «Отменить» у строки, где отмена возможна."""
 
     def __init__(self, on_rollback=None, parent=None):
         super().__init__(parent)
@@ -124,10 +125,14 @@ class FolderList(QScrollArea):
         row = self._rows.get(folder)
         if row is not None:
             row.button.setEnabled(enabled)
+            row.button.setVisible(enabled)
 
-    def disable_all_rollback(self):
+    def disable_all_rollback(self, hide=False):
+        """Выключить «Отменить» везде (на время работы); hide — убрать совсем (принято / всё откатано)."""
         for row in self._rows.values():
             row.button.setEnabled(False)
+            if hide:
+                row.button.setVisible(False)
 
     def show_folder(self, folder):
         """Прокрутить список к папке, которая сейчас обрабатывается."""
@@ -275,7 +280,7 @@ class RecoveryDialog(QDialog):
         choices = QHBoxLayout()
         group = QButtonGroup(box)
         buttons = {}
-        for text, value in (("Продолжить", CONTINUE), ("Откатить", ROLLBACK), ("Игнорировать", IGNORE)):
+        for text, value in (("Продолжить", CONTINUE), ("Отменить", ROLLBACK), ("Игнорировать", IGNORE)):
             button = QRadioButton(text)
             group.addButton(button)
             choices.addWidget(button)

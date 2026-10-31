@@ -87,8 +87,8 @@ def test_cancel_stops_before_next_folder(tmp_path):
     assert summary.cancelled
     assert len(summary.outcomes) == 1
     untouched = [folder for folder in os.listdir(root)
-                 if listing(os.path.join(root, folder)) == ["1.tif"]]
-    assert untouched  # вторая папка осталась как была
+                 if listing(os.path.join(root, folder)) == ["1.tif", "2.tif"]]
+    assert untouched  # вторая (бо́льшая) папка осталась как была: первой идёт та, где меньше файлов
 
 
 def test_rollback_all_restores_every_folder(tmp_path):
@@ -207,3 +207,15 @@ def test_environment_without_write_access_is_refused(tmp_path, monkeypatch):
     with pytest.raises(PreconditionError) as error:
         service.check_environment()
     assert "обработка невозможна" in str(error.value)
+
+
+def test_folders_are_processed_by_ascending_file_count(tmp_path):
+    root = tree_with_two_folders(tmp_path)      # «Объект 001» — 2 файла, «Объект 002» — 1
+    started = []
+    service = make_service(tmp_path)
+    service._on_event = lambda event: started.append(os.path.basename(event["folder"])) \
+        if event["kind"] == ev.FOLDER_STARTED else None
+    scanned = service.scan(root)
+    assert [os.path.basename(plan.folder) for plan in scanned.to_process] == ["Объект 002", "Объект 001"]
+    service.start(scanned)
+    assert started == ["Объект 002", "Объект 001"]

@@ -19,6 +19,10 @@ WARNING = "warning"
 NEUTRAL = "neutral"
 RUNNING = "running"
 
+# Папка-«лист» (без вложенных папок), где нет ни TIFF, ни JPEG: возможно, снимки пропали по ошибке,
+# а список без пометки выглядел бы так, будто всё сделано.
+NO_IMAGES = "TIFF-файлов нет — проверьте, не пропали ли снимки"
+
 WAITING = ("ожидает", NEUTRAL)
 
 # Подписи шагов конвертации и сетевых шагов (executor.py шлёт их байтовым
@@ -61,8 +65,21 @@ def initial_status(plan):
     if kind == CONFLICT:
         return (plan.decision.reason, WARNING)
     if kind == EMPTY:
-        return ("снимков нет", NEUTRAL)
+        return (NO_IMAGES, WARNING)
     return WAITING
+
+
+def leaf_folders(root):
+    """Папки без вложенных папок (кроме архива) — обход только по именам, без чтения файлов.
+
+    Сканер не показывает папки без снимков; среди «листьев» такие папки — подозрительные: возможно,
+    снимки пропали по ошибке (родительские папки пустыми не считаются)."""
+    leaves = []
+    for directory, subdirectories, _files in os.walk(root):
+        subdirectories[:] = [name for name in subdirectories if name.lower().replace("ё", "е") != "исх"]
+        if not subdirectories:
+            leaves.append(directory)
+    return leaves
 
 
 def display_name(folder, root):
@@ -95,7 +112,7 @@ def folder_status(state, error=None, rolled_back=False):
     if state == states.FOLDER_ROLLBACK_REQUIRED:
         if rolled_back:
             return ("ошибка, папка возвращена в исходное состояние: {}".format(error or ""), WARNING)
-        return ("ошибка, нужен откат: {}".format(error or ""), ERROR)
+        return ("ошибка, нужна отмена: {}".format(error or ""), ERROR)
     if state == states.FOLDER_FAILED:
         return ("ошибка, папка не изменена: {}".format(error or ""), ERROR)
     return (state, NEUTRAL)
@@ -105,9 +122,9 @@ def rollback_status(state, warnings=()):
     if state == ROLLED_BACK:
         return ("возвращена в исходное состояние", NEUTRAL)
     if state == NOTHING:
-        return ("откатывать нечего", NEUTRAL)
+        return ("папка не изменена", NEUTRAL)
     if state == PARTIAL:
-        return ("откат частичный: {}".format(warnings[0] if warnings else ""), WARNING)
+        return ("отмена частичная: {}".format(warnings[0] if warnings else ""), WARNING)
     return (state, WARNING)
 
 
@@ -125,6 +142,8 @@ def summary_line(summary):
     ]
     if summary.skipped_locked:
         parts.append("занято другими {}".format(summary.skipped_locked))
+    if summary.stopped:
+        parts.append("остановлено папок {}".format(len(summary.stopped)))
     if summary.cancelled:
         parts.append("остановлено пользователем")
     return "Обработано файлов {} · {} · за {:.0f} с".format(

@@ -55,5 +55,5 @@ class ConversionCancelled(CuratorError):
     """Конвертация остановлена пользователем."""
 
     def __init__(self, path):
-        super().__init__("{}: конвертация отменена".format(path))
+        super().__init__("{}: остановлено пользователем".format(path))
         self.path = path

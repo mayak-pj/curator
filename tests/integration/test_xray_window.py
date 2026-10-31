@@ -194,3 +194,120 @@ def test_automatic_rollback_is_not_offered_again_and_errors_are_not_doubled(tmp_
     assert page.errors.text().count("нет места") == 1
     assert not page.accept_button.isEnabled()
     window.close()
+
+
+def test_file_flow_follows_events_and_does_not_rush_the_final_names(tmp_path, offscreen):
+    """Сцена идёт за событиями; «готово» и полёт в архив — только по file_completed (фаза B — пачкой)."""
+    from curator.modules.xray import flow
+
+    root = tree_with_two_folders(tmp_path)
+    qt_app, window, page = open_page(program(tmp_path))
+    result = page.service.scan(root)
+    page._on_scan_finished(result)
+    plan = [p for p in result.plans if p.files][0]
+    folder, post = plan.folder, page._handle_event
+
+    post(ev.event(ev.FOLDER_STARTED, folder=folder, files=len(plan.files)))
+    tiles = page.flow.rows
+    assert sorted(tiles) == [f.index for f in plan.files]
+    first = tiles[1]
+    assert first.before == "1.tif" and first.after == "Рентгенограмма 1.jpeg + ИСХ\\Рентгенограмма 1.tif"
+    assert first.phase == flow.WAITING
+
+    post(ev.event(ev.FILE_STARTED, folder=folder, index=1))
+    post(ev.event(ev.PROGRESS, stage=states.STAGED, fraction=1.0, index=1))
+    post(ev.event(ev.PROGRESS, stage="encode", fraction=0.5, index=1))
+    assert first.phase == flow.RUNNING and first.current == "convert" and first.fraction == 0.5
+    assert states.STAGED in first.done_steps and states.JPEG_UPLOADED not in first.done_steps
+    assert "TIF" not in page.flow.scene.caption and "1.tif" in page.flow.scene.caption
+
+    assert first.fly_at is None                                        # копия в архиве ещё не записана
+    post(ev.event(ev.PROGRESS, stage=states.SOURCE_COPIED, fraction=1.0, index=1))
+    assert first.fly_at is not None                                    # оригинал в архиве: летит туда
+    post(ev.event(ev.FILE_PREPARED, folder=folder, index=1))
+    assert first.phase == flow.PREPARED and first.done_at is None      # имена ещё не зафиксированы
+    post(ev.event(ev.FILE_COMPLETED, folder=folder, index=1))
+    post(ev.event(ev.FILE_COMPLETED, folder=folder, index=2))
+    assert first.phase == flow.COMPLETED and first.done_at is not None
+    assert tiles[2].done_at > first.done_at                            # пачка фазы B выстраивается в очередь
+    assert page.flow.scene.grab().width() > 0                          # кадр рисуется без ошибок
+    post(ev.event(ev.FOLDER_FINISHED, folder=folder, state=states.FOLDER_DONE))
+    # итог папки держится на экране: следующая папка открывается не сразу, а через очередь
+    post(ev.event(ev.FOLDER_STARTED, folder=folder, files=len(plan.files)))
+    assert page.flow.rows[1].phase == flow.COMPLETED and len(page.flow._queue) == 1
+    window.close()
+
+
+def test_file_flow_switch_is_remembered_and_stops_building_rows(tmp_path, offscreen):
+    from curator.platform import state
+
+    root = tree_with_two_folders(tmp_path)
+    paths = program(tmp_path)
+    qt_app, window, page = open_page(paths)
+    result = page.service.scan(root)
+    page._on_scan_finished(result)
+    plan = [p for p in result.plans if p.files][0]
+
+    page.flow.toggle.setChecked(False)
+    assert state.load(paths.gui_state)["show_flow"] is False
+    page._handle_event(ev.event(ev.FOLDER_STARTED, folder=plan.folder, files=len(plan.files)))
+    page._handle_event(ev.event(ev.FILE_STARTED, folder=plan.folder, index=1))
+    assert page.flow.rows == {} and not page.flow.scene.enabled
+    window.close()
+
+    qt_app, window, page = open_page(paths)
+    assert not page.flow.enabled
+    window.close()
+
+
+def test_empty_leaf_folder_is_flagged_and_parent_folders_are_not(tmp_path, offscreen):
+    from curator.modules.xray import status
+
+    root = tree_with_two_folders(tmp_path)
+    empty = os.path.join(root, "Пустая")
+    os.makedirs(empty)
+    qt_app, window, page = open_page(program(tmp_path))
+    page._leaves = status.leaf_folders(root)
+    page._on_scan_finished(page.service.scan(root))
+    assert empty in page.folders.rows and page.empty_folders == [empty]
+    row = page.folders.rows[empty]
+    assert row.status.text() == status.NO_IMAGES and row.status.property("tone") == status.WARNING
+    assert root not in page.folders.rows                      # корень с вложенными папками — не «пустая»
+    assert "папок без снимков 1" in page.current_label.text() and page.errors.count == 1
+    window.close()
+
+
+def test_rollback_buttons_only_where_rollback_is_possible_and_rollback_all_is_red(tmp_path, offscreen):
+    from curator.modules.xray import status
+
+    qt_app, window, page = open_page(program(tmp_path))
+    window.show()
+    folder = os.path.join(str(tmp_path), "Объект")
+    page.folders.set_status(folder, "готово", status.SUCCESS)
+    button = page.folders.rows[folder].button
+    assert button.isHidden()
+    page.folders.set_rollback_enabled(folder, True)
+    assert not button.isHidden() and button.isEnabled()
+    page.folders.disable_all_rollback(hide=True)
+    assert button.isHidden()
+    page._on_task_done({"tag": "rollback_all", "result": None})
+    assert page.status_label.property("tone") == status.ERROR
+    page._on_task_done({"tag": "scan", "result": None})
+    assert page.status_label.property("tone") == status.NEUTRAL
+    window.close()
+
+
+def test_stop_by_user_is_not_an_error(tmp_path, offscreen):
+    from curator.app.service import FolderOutcome, SessionSummary
+    from curator.modules.xray import status
+
+    qt_app, window, page = open_page(program(tmp_path))
+    folder = os.path.join(str(tmp_path), "Объект")
+    page._handle_event(ev.event(ev.FOLDER_FINISHED, folder=folder, state=states.FOLDER_CANCELLED,
+                                error="x: остановлено пользователем"))
+    assert page.errors.count == 0
+    assert page.folders.rows[folder].status.text() == "остановлено, папка не изменена"
+    summary = SessionSummary(root="/r", outcomes=[FolderOutcome(folder=folder, state=states.FOLDER_CANCELLED)])
+    assert summary.failed == [] and len(summary.stopped) == 1
+    assert "с ошибками 0" in status.summary_line(summary) and "остановлено папок 1" in status.summary_line(summary)
+    window.close()

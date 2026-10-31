@@ -70,7 +70,7 @@ def test_rollback_offered_only_where_disk_changed():
 
 def test_rollback_statuses():
     assert gui_status.rollback_status(ROLLED_BACK)[0] == "возвращена в исходное состояние"
-    assert gui_status.rollback_status(NOTHING)[0] == "откатывать нечего"
+    assert gui_status.rollback_status(NOTHING)[0] == "папка не изменена"
     text, colour = gui_status.rollback_status(PARTIAL, ["JPEG изменён"])
     assert colour == gui_status.WARNING and "JPEG изменён" in text
 
