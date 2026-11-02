@@ -92,4 +92,7 @@ class FolderPlan:
 
 
 def _is_tiff(name):
+    # «._имя.tif» — служебные файлы macOS (AppleDouble) на сетевых дисках: это не снимки.
+    if name.startswith("._"):
+        return False
     return os.path.splitext(name)[1].lower() in TIFF_EXTENSIONS
