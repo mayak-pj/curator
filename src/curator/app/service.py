@@ -107,6 +107,13 @@ def shared_with_v1_problems(settings, paths):
     return problems
 
 
+STAGE_NAMES = {
+    "PLANNED": "план", "STAGED": "чтение оригинала", "CONVERTED": "конвертация", "VALIDATED": "проверка JPEG",
+    "JPEG_UPLOADED": "запись JPEG", "SOURCE_COPIED": "копия в архив", "JPEG_FINAL": "переименование JPEG",
+    "SOURCE_FINAL": "переименование в архиве", "COMPLETED": "удаление оригинала",
+}
+
+
 class ProcessingService:
     def __init__(self, settings=None, paths=None, on_event=None, session_name=None):
         self.paths = paths if paths is not None else appdirs.AppPaths()
@@ -230,6 +237,20 @@ class ProcessingService:
         self._emit(ev.SESSION_FINISHED, summary=summary)
         return summary
 
+    def _log_timings(self, folder, result, wall, cpu):
+        """Замер по этапам (my_reports, 03.11.2026): где уходит время — сеть, диск или процессор."""
+        for item in result.files:
+            size = (item.signature or {}).get("size", 0)
+            parts = []
+            for state, (seconds, cpu_seconds) in item.timings.items():
+                if state in STAGE_NAMES:
+                    parts.append("{} {:.1f} с (проц. {:.1f} с)".format(STAGE_NAMES.get(state, state), seconds, cpu_seconds))
+            self.logger.info("Замер: %s файл %s, %.1f МБ -> JPEG %.1f МБ: %s", folder, item.index,
+                             size / 1048576.0, item.jpeg_bytes / 1048576.0, "; ".join(parts) or "нет данных")
+        if wall > 0:
+            self.logger.info("Замер: %s — всего %.1f с, процессор Curator %.1f с (в среднем %.0f %% одного ядра)",
+                             folder, wall, cpu, 100.0 * cpu / wall)
+
     def cancel(self):
         self._cancel.set()
         self.logger.info("Пользователь остановил обработку")
@@ -250,6 +271,7 @@ class ProcessingService:
 
         self._emit(ev.FOLDER_STARTED, folder=plan.folder, files=len(plan.files))
         self.logger.info("Папка %s: файлов %s", plan.folder, len(plan.files))
+        wall_start, cpu_start = time.monotonic(), time.process_time()
         try:
             executor = FolderExecutor(
                 journal, self._execution_options(), on_event=self._forward,
@@ -257,6 +279,7 @@ class ProcessingService:
             result = executor.run(plan)
         finally:
             lock.release()
+        self._log_timings(plan.folder, result, time.monotonic() - wall_start, time.process_time() - cpu_start)
 
         record = folder_from_result(plan, result)
         self._records[plan.folder] = record

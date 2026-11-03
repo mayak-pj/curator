@@ -146,8 +146,8 @@ def summary_line(summary):
         parts.append("остановлено папок {}".format(len(summary.stopped)))
     if summary.cancelled:
         parts.append("остановлено пользователем")
-    return "Обработано файлов {} · {} · за {:.0f} с".format(
-        summary.files, ", ".join(parts), summary.seconds)
+    return "Обработано файлов {} · {} · за {}".format(
+        summary.files, ", ".join(parts), format_duration(summary.seconds))
 
 
 def progress_line(done_files, total_files, fraction, elapsed_seconds):
@@ -173,14 +173,15 @@ def _estimate_remaining(fraction, elapsed_seconds):
 
 
 def format_duration(seconds):
-    seconds = max(0, int(seconds))
-    if seconds < 60:
-        return "{} с".format(seconds)
-    minutes = seconds // 60
-    if minutes < 60:
-        return "{} мин".format(minutes)
+    """«45 с», «1 мин 30 с», «1 ч 1 мин 1 с» — часы показываются, только если прошёл час и больше."""
+    seconds = max(0, int(round(seconds)))
+    minutes, secs = divmod(seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    return "{} ч {} мин".format(hours, minutes)
+    if hours:
+        return "{} ч {} мин {} с".format(hours, minutes, secs)
+    if minutes:
+        return "{} мин {} с".format(minutes, secs)
+    return "{} с".format(secs)
 
 
 def progress_bucket(stage):

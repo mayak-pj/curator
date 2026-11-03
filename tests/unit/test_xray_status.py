@@ -96,8 +96,9 @@ def test_folder_progress_shows_file_count():
 @pytest.mark.parametrize("seconds, expected", [
     (0, "0 с"),
     (45, "45 с"),
-    (90, "1 мин"),
-    (3661, "1 ч 1 мин"),
+    (90, "1 мин 30 с"),
+    (3600, "1 ч 0 мин 0 с"),
+    (3661, "1 ч 1 мин 1 с"),
 ])
 def test_format_duration(seconds, expected):
     assert gui_status.format_duration(seconds) == expected
@@ -111,7 +112,7 @@ def test_progress_line_before_any_progress_has_no_estimate():
 def test_progress_line_estimates_remaining_time_from_average_pace():
     # 20 % готово за 20 с -> на всё уйдёт ~100 с -> осталось ~80 с.
     line = gui_status.progress_line(2, 10, fraction=0.2, elapsed_seconds=20)
-    assert line == "Готово файлов: 2 из 10 · 20 % · осталось ~1 мин"
+    assert line == "Готово файлов: 2 из 10 · 20 % · осталось ~1 мин 20 с"
 
 
 def test_progress_line_reflects_progress_within_the_current_file():
@@ -138,7 +139,7 @@ def test_session_progress_counts_current_file_and_never_goes_back():
     progress.file_prepared()
     assert progress.value == pytest.approx(1.0) and progress.done_files == 1
     clock[0] += 60
-    assert progress.line() == "Готово файлов: 1 из 4 · 25 % · осталось ~3 мин"
+    assert progress.line() == "Готово файлов: 1 из 4 · 25 % · осталось ~3 мин 0 с"
 
 
 def test_session_progress_without_files_does_not_divide_by_zero():

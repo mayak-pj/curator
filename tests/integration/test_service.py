@@ -219,3 +219,16 @@ def test_folders_are_processed_by_ascending_file_count(tmp_path):
     assert [os.path.basename(plan.folder) for plan in scanned.to_process] == ["Объект 002", "Объект 001"]
     service.start(scanned)
     assert started == ["Объект 002", "Объект 001"]
+
+
+def test_log_contains_timings_per_stage_and_cpu(tmp_path):
+    root = tree_with_two_folders(tmp_path)
+    service = make_service(tmp_path)
+
+    service.start(root)
+    service.accept()
+
+    log_text = open(os.path.join(service.paths.logs, os.listdir(service.paths.logs)[0]), encoding="utf-8").read()
+    assert "Замер:" in log_text
+    assert "чтение оригинала" in log_text and "конвертация" in log_text and "запись JPEG" in log_text
+    assert "процессор Curator" in log_text

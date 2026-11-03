@@ -59,6 +59,8 @@ class FileResult:
     seconds: float = 0.0
     error: Optional[str] = None
     signature: Optional[dict] = None
+    # состояние -> [секунд на стене, секунд процессора процесса]; для замеров на целевом ПК
+    timings: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -282,7 +284,11 @@ class FolderExecutor:
         states.check_transition(file_result.state, state)
         folder = self._folder_of(file_result)
         self.journal.file_state(folder, file_result.index, state, phase="intent", **fields)
+        wall, cpu = time.monotonic(), time.process_time()
         value = action() if action is not None else None
+        spent = file_result.timings.setdefault(state, [0.0, 0.0])
+        spent[0] += time.monotonic() - wall
+        spent[1] += time.process_time() - cpu
         file_result.state = state
         self.journal.file_state(folder, file_result.index, state, phase="done",
                                 **(after(value) if after is not None else {}))
