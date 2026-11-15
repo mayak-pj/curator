@@ -58,6 +58,8 @@ class XrayNaming(NamingScheme):
         return "{} {}{}".format(self.prefix, index, extension)
 
     def is_processed_jpeg(self, filename):
+        if filename.startswith("._"):
+            return False  # служебный файл macOS (AppleDouble), не снимок
         stem, extension = os.path.splitext(filename)
         if extension.lower() not in JPEG_EXTENSIONS:
             return False

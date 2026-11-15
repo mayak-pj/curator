@@ -21,6 +21,7 @@ from curator.transaction import recovery as recovery_module
 from curator.transaction.executor import ExecutionOptions, FolderExecutor
 from curator.transaction.journal import Journal, session_filename, session_header
 from curator.transaction.records import folder_from_result, folders_from_journal
+from curator.transaction.renamer import rename_jpegs
 from curator.transaction.rollback import ROLLED_BACK, rollback_folder
 
 CONTINUE = "continue"
@@ -52,6 +53,8 @@ class SessionSummary:
     cancelled: bool = False
     seconds: float = 0.0
     accepted: bool = False
+    renamed_folders: int = 0  # готовые папки, где .jpg -> .jpeg (D26)
+    renamed_files: int = 0
 
     @property
     def succeeded(self):
@@ -229,7 +232,16 @@ class ProcessingService:
             else:
                 summary.skipped_locked += 1
 
+        for plan in result.to_rename:
+            if self._cancel.is_set():
+                summary.cancelled = True
+                break
+            self._rename_folder(plan, journal, summary)
+
         summary.seconds = round(time.monotonic() - started, 2)
+        if summary.renamed_folders:
+            self.logger.info("Переименовано .jpg -> .jpeg: %s файлов в %s папках",
+                             summary.renamed_files, summary.renamed_folders)
         self.logger.info("Обработка завершена: успешно %s, с ошибками %s, остановлено пользователем %s, "
                          "пропущено занятых %s, за %s с",
                          len(summary.succeeded), len(summary.failed), len(summary.stopped),
@@ -302,6 +314,45 @@ class ProcessingService:
         self._emit(ev.FOLDER_FINISHED, folder=plan.folder, state=outcome.state,
                    error=outcome.error, rolled_back=outcome.rolled_back)
         return outcome
+
+    def _rename_folder(self, plan, journal, summary):
+        """Готовая папка: «рентгенограмма….jpg» -> «….jpeg» (D26). Блокировка и журнал — как у обработки."""
+        reason = self._legacy_reason(plan.folder)
+        if reason:
+            self._problem("Папка %s пропущена: %s", plan.folder, reason, folder=plan.folder)
+            self._emit(ev.FOLDER_SKIPPED, folder=plan.folder, reason=reason)
+            return
+        lock = FolderLock(plan.folder, self.locks_dir, self.settings.lock_stale_minutes)
+        try:
+            lock.acquire()
+        except FolderLocked as exc:
+            self._problem("Папка занята: %s", exc, folder=plan.folder)
+            self._emit(ev.FOLDER_SKIPPED, folder=plan.folder, reason=str(exc))
+            summary.skipped_locked += 1
+            return
+        try:
+            result = rename_jpegs(plan, journal)
+        finally:
+            lock.release()
+
+        self._records[plan.folder] = result.record
+        rolled_back = False
+        if result.state == states.FOLDER_DONE:
+            summary.renamed_folders += 1
+            summary.renamed_files += result.renamed
+            self.logger.info("Папка %s: .jpg -> .jpeg, файлов %s", plan.folder, result.renamed)
+        else:
+            summary.outcomes.append(FolderOutcome(folder=plan.folder, state=result.state, error=result.error))
+            if result.state == states.FOLDER_ROLLBACK_REQUIRED:
+                self.logger.error("Папка %s: %s — выполняется автоматический откат", plan.folder, result.error)
+                rolled = self.rollback_folder(plan.folder)
+                rolled_back = rolled.state == ROLLED_BACK
+                summary.outcomes[-1].rolled_back = rolled_back
+                summary.outcomes[-1].warnings = list(rolled.warnings)
+            else:
+                self._problem("Папка %s: %s", plan.folder, result.error, folder=plan.folder)
+        self._emit(ev.FOLDER_RENAMED, folder=plan.folder, state=result.state, files=result.renamed,
+                   error=result.error, rolled_back=rolled_back)
 
     # ------------------------------------------------------------------ откат
 

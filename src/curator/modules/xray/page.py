@@ -325,6 +325,8 @@ class XrayPage(QWidget):
         elif kind == ev.FOLDER_FINISHED:
             self.flow.folder_finished()
             self._on_folder_finished(event)
+        elif kind == ev.FOLDER_RENAMED:
+            self._on_folder_renamed(event)
         elif kind == ev.FOLDER_SKIPPED:
             self.folders.set_status(event["folder"], "пропущена: занята другим пользователем", status_module.WARNING)
             self.errors.add(event["reason"], "warning", event["folder"])
@@ -381,6 +383,8 @@ class XrayPage(QWidget):
         text = "К обработке {} файлов в {} папках · уже готовых {} · конфликтов {}".format(
             result.total_files, len(result.to_process),
             len(result.by_kind("done")), len(result.by_kind("conflict")))
+        if result.to_rename:
+            text += " · .jpg → .jpeg: {} файлов в {} папках".format(result.total_renames, len(result.to_rename))
         if empty:
             text += " · папок без снимков {}".format(len(empty))
         self.current_label.setText(text)
@@ -410,6 +414,19 @@ class XrayPage(QWidget):
         # Остановка пользователем — не ошибка и не предупреждение: в панель ошибок не попадает.
         if colour in (status_module.ERROR, status_module.WARNING) and not repeated \
                 and event["state"] != states.FOLDER_CANCELLED:
+            self.errors.add(text, "error" if colour == status_module.ERROR else "warning", folder)
+
+    def _on_folder_renamed(self, event):
+        """Готовая папка: .jpg -> .jpeg (D26). Откат — той же кнопкой «Отменить», что и у обработки."""
+        folder = event["folder"]
+        text, colour = status_module.renamed_status(event["state"], event.get("files", 0),
+                                                    event.get("error"), event.get("rolled_back", False))
+        self.folders.set_status(folder, text, colour)
+        if status_module.can_rollback(event["state"]) and not event.get("rolled_back") \
+                and folder not in self.processed_folders:
+            self.folders.set_rollback_enabled(folder, True)
+            self.processed_folders.append(folder)
+        if colour in (status_module.ERROR, status_module.WARNING):
             self.errors.add(text, "error" if colour == status_module.ERROR else "warning", folder)
 
     def _on_rollback_finished(self, event):

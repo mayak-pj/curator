@@ -61,6 +61,13 @@ def rollback_folder(record, journal, chunk_size=CHUNK_SIZE):
         touched = touched or bool(file_result.actions)
         result.warnings.extend(file_result.warnings)
 
+    for rename in sorted(record.renames.values(), key=lambda item: item.index, reverse=True):
+        file_result = FileRollback(index=rename.index)
+        result.files.append(file_result)
+        _undo_rename(record, rename, file_result, journal)
+        touched = touched or bool(file_result.actions)
+        result.warnings.extend(file_result.warnings)
+
     if record.archive_created and record.archive_dir:
         if safe_copy.remove_dir_if_empty(record.archive_dir):
             journal.record(NOTE, folder=record.folder, action="rollback_remove_archive_dir",
@@ -153,6 +160,27 @@ def _remove_jpeg(file_record, file_result, journal, chunk_size):
     safe_copy.remove_quietly(jpeg)
     _note(journal, file_record, file_result, "removed_jpeg", jpeg,
           "удалён {}".format(os.path.basename(jpeg)))
+
+
+def _undo_rename(record, rename, file_result, journal):
+    """Вернуть старое имя (D26). Содержимое не менялось — сверять хеш незачем, ничего не удаляется."""
+    source_there = os.path.lexists(rename.source)
+    target_there = os.path.lexists(rename.target)
+    if source_there and not target_there:
+        return  # переименование не состоялось или уже отменено
+    if target_there and not source_there:
+        safe_copy.safe_rename(rename.target, rename.source)
+        journal.record(NOTE, folder=record.folder, n=rename.index, action="rollback_renamed_back",
+                       path=rename.source)
+        file_result.actions.append("{} -> {}".format(
+            os.path.basename(rename.target), os.path.basename(rename.source)))
+        return
+    if source_there and target_there:
+        file_result.warnings.append("{}: есть и {} — имя не возвращено".format(
+            os.path.basename(rename.target), os.path.basename(rename.source)))
+    elif rename.done:
+        file_result.warnings.append("{}: файл не найден — имя не возвращено".format(
+            os.path.basename(rename.target)))
 
 
 def _hash_matches(path, expected, chunk_size):

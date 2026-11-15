@@ -21,6 +21,7 @@ SESSION_END = "session_end"
 FOLDER_STATE = "folder_state"
 FILE_STATE = "file_state"
 NOTE = "note"
+RENAME = "rename"  # переименование файла на месте (D26): src -> dst, phase intent/done
 
 
 class Journal:

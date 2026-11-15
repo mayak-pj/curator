@@ -232,3 +232,105 @@ def test_log_contains_timings_per_stage_and_cpu(tmp_path):
     assert "Замер:" in log_text
     assert "чтение оригинала" in log_text and "конвертация" in log_text and "запись JPEG" in log_text
     assert "процессор Curator" in log_text
+
+
+# --- D26: готовая папка, «рентгенограмма….jpg» -> «….jpeg» ------------------------------
+
+def done_folder_with_jpg(tmp_path):
+    root = str(tmp_path / "сеть")
+    folder = os.path.join(root, "Объект 003")
+    os.makedirs(os.path.join(folder, "ИСХ"))
+    for name, data in (("Рентгенограмма 1.jpg", b"jpeg-1"), ("Рентгенограмма 2.JPG", b"jpeg-2"),
+                       ("ИСХ/снимок а.tif", b"tif-a"), ("ИСХ/снимок б.tif", b"tif-b")):
+        with open(os.path.join(folder, name), "wb") as stream:
+            stream.write(data)
+    return root, folder
+
+
+def test_done_folder_jpg_renamed_to_jpeg_and_rolled_back(tmp_path):
+    root, folder = done_folder_with_jpg(tmp_path)
+    events = []
+    service = make_service(tmp_path, on_event=events.append)
+
+    scan = service.scan(root)
+    assert len(scan.to_rename) == 1 and scan.total_renames == 2 and not scan.to_process
+
+    summary = service.start(root)
+    assert summary.renamed_folders == 1 and summary.renamed_files == 2 and not summary.failed
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
+    assert listing(os.path.join(folder, "ИСХ")) == ["снимок а.tif", "снимок б.tif"]  # архив не трогаем
+    with open(os.path.join(folder, "Рентгенограмма 2.jpeg"), "rb") as stream:
+        assert stream.read() == b"jpeg-2"
+    renamed = [event for event in events if event["kind"] == ev.FOLDER_RENAMED]
+    assert renamed and renamed[0]["state"] == states.FOLDER_DONE and renamed[0]["files"] == 2
+
+    result = service.rollback_folder(folder)
+    assert result.complete
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
+
+    # Повторный откат ничего не ломает.
+    assert service.rollback_folder(folder).state == "nothing_to_roll_back"
+
+    # После отката папку можно снова привести к .jpeg — следующий запуск сделает то же самое.
+    again = make_service(tmp_path).start(root)
+    assert again.renamed_files == 2
+
+
+def test_jpg_rename_is_written_to_the_journal_and_readable_back(tmp_path):
+    from curator.transaction.journal import read_journal
+    from curator.transaction.records import folders_from_journal
+    from curator.transaction import recovery
+
+    root, folder = done_folder_with_jpg(tmp_path)
+    service = make_service(tmp_path)
+    service.start(root)
+    path = os.path.join(service.paths.journal, os.listdir(service.paths.journal)[0])
+
+    record = folders_from_journal(read_journal(path))[folder]
+    assert sorted(os.path.basename(item.target) for item in record.renames.values()) == [
+        "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
+    assert all(item.done for item in record.renames.values())
+    # Переименование атомарно: после сбоя разбирать нечего.
+    assert not recovery.analyse(record).needs_attention
+
+    # Откат по журналу (как после сбоя) возвращает старые имена.
+    from curator.transaction.rollback import rollback_folder
+    from curator.transaction.journal import Journal
+
+    with Journal(str(tmp_path / "откат.jsonl")) as journal:
+        assert rollback_folder(record, journal).complete
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
+
+
+def test_failure_in_the_middle_of_jpg_renames_is_rolled_back(tmp_path, monkeypatch):
+    from curator.fs import safe_copy
+
+    root, folder = done_folder_with_jpg(tmp_path)
+    service = make_service(tmp_path)
+    real_rename = safe_copy.safe_rename
+    calls = []
+
+    def fail_second(source, destination):
+        calls.append(source)
+        if len(calls) == 2:
+            raise OSError(5, "связь потеряна")
+        return real_rename(source, destination)
+
+    monkeypatch.setattr(safe_copy, "safe_rename", fail_second)
+    monkeypatch.setattr("curator.transaction.renamer.safe_copy.safe_rename", fail_second)
+    summary = service.start(root)
+    monkeypatch.undo()
+
+    failed = [outcome for outcome in summary.outcomes if outcome.folder == folder][0]
+    assert failed.state == states.FOLDER_ROLLBACK_REQUIRED and failed.rolled_back
+    assert summary.renamed_folders == 0
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
+
+
+def test_conflict_folder_with_jpg_is_not_touched(tmp_path):
+    root, folder = done_folder_with_jpg(tmp_path)
+    os.remove(os.path.join(folder, "ИСХ", "снимок б.tif"))  # JPEG 2, TIFF 1 — конфликт
+
+    summary = make_service(tmp_path).start(root)
+    assert summary.renamed_folders == 0
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]

@@ -7,7 +7,7 @@
 
 import os
 
-from curator.domain.models import PROCESS_FROM_ARCHIVE, FolderPlan, PlannedFile
+from curator.domain.models import DONE, PROCESS_FROM_ARCHIVE, FolderPlan, PlannedFile
 from curator.domain.naming import normalize
 from curator.domain.ordering import natural_sorted
 
@@ -18,6 +18,10 @@ PART_SUFFIX = ".part"
 
 def plan_folder(snapshot, decision, naming, max_path=MAX_PATH):
     """FolderSnapshot + FolderDecision -> FolderPlan (ничего не меняя на диске)."""
+    if decision.kind == DONE:
+        renames, problems = _jpeg_renames(snapshot, naming, max_path)
+        return FolderPlan(folder=snapshot.path, decision=decision,
+                          jpeg_renames=tuple(renames), problems=tuple(problems))
     if not decision.processable:
         return FolderPlan(folder=snapshot.path, decision=decision)
 
@@ -47,6 +51,29 @@ def plan_folder(snapshot, decision, naming, max_path=MAX_PATH):
         problems=tuple(problems),
         two_step_renames=_needs_two_step(files, from_archive),
     )
+
+
+def _jpeg_renames(snapshot, naming, max_path):
+    """Готовая папка: «рентгенограмма….jpg» -> «….jpeg», имя без изменений (D26).
+
+    Занятое новое имя или слишком длинный путь — папку не трогаем совсем."""
+    existing = {normalize(name) for name in snapshot.files}
+    renames, problems = [], []
+    for name in snapshot.processed_jpegs(naming):
+        stem, extension = os.path.splitext(name)
+        if extension.lower() != ".jpg":
+            continue
+        new_name = stem + naming.jpeg_extension
+        target = os.path.join(snapshot.path, new_name)
+        if normalize(new_name) in existing:
+            problems.append("{} не переименован: {} уже существует".format(name, new_name))
+        elif len(target) > max_path:
+            problems.append("путь длиннее {} символов: {}".format(max_path, target))
+        else:
+            renames.append((os.path.join(snapshot.path, name), target))
+    if problems:
+        return [], problems
+    return renames, []
 
 
 def _needs_two_step(files, from_archive):

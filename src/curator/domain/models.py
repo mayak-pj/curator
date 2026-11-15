@@ -85,10 +85,16 @@ class FolderPlan:
     # Переименование внутри архива, где целевое имя занято другим исходником,
     # выполняется через временные имена (этап 4).
     two_step_renames: bool = False
+    # Готовая папка (R1): JPEG «рентгенограмма….jpg» -> «….jpeg», пары (старый путь, новый путь); D26.
+    jpeg_renames: Tuple[Tuple[str, str], ...] = ()
 
     @property
     def ok(self):
         return self.decision.processable and not self.problems and bool(self.files)
+
+    @property
+    def renames_ok(self):
+        return self.decision.kind == DONE and not self.problems and bool(self.jpeg_renames)
 
 
 def _is_tiff(name):

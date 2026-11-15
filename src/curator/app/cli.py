@@ -112,6 +112,9 @@ def cmd_process(args):
     print("\nУспешно {}, с ошибками {}, остановлено {}, пропущено занятых {}, файлов обработано {}, за {} с".format(
         len(summary.succeeded), len(summary.failed), len(summary.stopped), summary.skipped_locked,
         summary.files, summary.seconds))
+    if summary.renamed_folders:
+        print("Переименовано .jpg -> .jpeg: {} файлов в {} папках".format(
+            summary.renamed_files, summary.renamed_folders))
     for outcome in summary.failed:
         print("  {} — {}{}".format(outcome.folder, outcome.error,
                                    " (откат выполнен)" if outcome.rolled_back else ""))

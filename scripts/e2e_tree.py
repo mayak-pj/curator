@@ -24,6 +24,11 @@ LAYOUT = {
     os.path.join("Объект 001", ""): ["снимок 1.tif", "снимок 2.tif", "снимок 10.tif"],
     os.path.join("Объект 002 №2", "ИСХ"): ["1.tiff", "2.tiff"],
 }
+# Уже готовая папка (R1) с JPEG под расширением .jpg: обработка переименовывает их в .jpeg,
+# откат возвращает .jpg, архив не трогается (D26).
+DONE_FOLDER = "Объект 003 готов"
+DONE_JPEGS = {"Рентгенограмма 1.jpg": b"jpeg-1", "Рентгенограмма 2.JPG": b"jpeg-2"}
+DONE_ARCHIVE = {"снимок а.tif": b"tif-a", "снимок б.tif": b"tif-b"}
 HASHES_FILE = "hashes.json"
 WIDTH, HEIGHT = 800, 600
 
@@ -49,6 +54,11 @@ def create(root):
             ramp = ramp.linear(65535.0 / (WIDTH - 1), index * 137).cast("ushort")
             ramp.copy(interpretation="grey16").tiffsave(path, compression="lzw" if index % 2 else "none")
             hashes[name] = _hash(path)
+    os.makedirs(os.path.join(root, DONE_FOLDER, "ИСХ"))
+    for name, data in DONE_JPEGS.items():
+        _write(os.path.join(root, DONE_FOLDER, name), data)
+    for name, data in DONE_ARCHIVE.items():
+        _write(os.path.join(root, DONE_FOLDER, "ИСХ", name), data)
     with open(os.path.join(root, HASHES_FILE), "w", encoding="utf-8") as stream:
         json.dump(hashes, stream, ensure_ascii=False, indent=1)
     print("создано дерево: {} файлов в {} папках".format(sum(len(v) for v in LAYOUT.values()), len(LAYOUT)))
@@ -95,6 +105,7 @@ def check(root, state):
                 if (image.width, image.height) != (WIDTH, HEIGHT):
                     problems.append("{}: размер {} не совпадает с исходником".format(name, (image.width, image.height)))
 
+    problems.extend(_check_done_folder(root, state))
     if problems:
         print("ПРОБЛЕМЫ:")
         for problem in problems:
@@ -102,6 +113,28 @@ def check(root, state):
         return 1
     print("состояние «{}» подтверждено".format(state))
     return 0
+
+
+def _check_done_folder(root, state):
+    folder = os.path.join(root, DONE_FOLDER)
+    problems = []
+    expected = {name if state == "original" else os.path.splitext(name)[0] + ".jpeg": data
+                for name, data in DONE_JPEGS.items()}
+    present = sorted(name for name in os.listdir(folder) if name != "ИСХ")
+    if present != sorted(expected):
+        problems.append("{}: файлы {} вместо {}".format(folder, present, sorted(expected)))
+    for name, data in expected.items():
+        path = os.path.join(folder, name)
+        if os.path.exists(path) and open(path, "rb").read() != data:
+            problems.append("{}: содержимое {} изменилось".format(folder, name))
+    if sorted(os.listdir(os.path.join(folder, "ИСХ"))) != sorted(DONE_ARCHIVE):
+        problems.append("{}: архив ИСХ изменился".format(folder))
+    return problems
+
+
+def _write(path, data):
+    with open(path, "wb") as stream:
+        stream.write(data)
 
 
 def _hash(path):

@@ -35,6 +35,15 @@ class ScanResult:
         return sorted((plan for plan in self.plans if plan.ok), key=lambda plan: len(plan.files))
 
     @property
+    def to_rename(self):
+        """Готовые папки, где JPEG надо привести к расширению .jpeg (D26)."""
+        return [plan for plan in self.plans if plan.renames_ok]
+
+    @property
+    def total_renames(self):
+        return sum(len(plan.jpeg_renames) for plan in self.to_rename)
+
+    @property
     def blocked(self):
         return [plan for plan in self.plans if plan.decision.processable and plan.problems]
 
@@ -70,7 +79,18 @@ def render_report(result, full=False, max_files=3):
         "",
     ]
     _group(lines, "К ОБРАБОТКЕ", result.to_process, result.root, full, max_files, show_files=True)
-    _group(lines, "НЕ ОБРАБАТЫВАЛИСЬ (уже готовы)", result.by_kind(DONE), result.root, full, max_files)
+    _group(lines, "НЕ ОБРАБАТЫВАЛИСЬ (уже готовы)", result.by_kind(DONE), result.root, full, max_files,
+           show_problems=True)
+    if result.to_rename:
+        lines.append("ПЕРЕИМЕНОВАНИЕ .jpg -> .jpeg ({} файлов в {} папках):".format(
+            result.total_renames, len(result.to_rename)))
+        for plan in result.to_rename:
+            lines.append("  {}".format(_relative(plan.folder, result.root)))
+            shown = plan.jpeg_renames if full else plan.jpeg_renames[:max_files]
+            lines.extend("      {} -> {}".format(os.path.basename(old), os.path.basename(new)) for old, new in shown)
+            if len(plan.jpeg_renames) > len(shown):
+                lines.append("      … ещё {} файл(ов)".format(len(plan.jpeg_renames) - len(shown)))
+        lines.append("")
     _group(lines, "КОНФЛИКТЫ (папка не тронута)", result.by_kind(CONFLICT), result.root, full, max_files)
     _group(lines, "ОБРАБОТКА НЕВОЗМОЖНА", result.blocked, result.root, full, max_files, show_problems=True)
 
@@ -79,9 +99,11 @@ def render_report(result, full=False, max_files=3):
         lines.extend("  {} — {}".format(path, exc) for path, exc in result.errors)
         lines.append("")
 
-    lines.append("ИТОГО: к обработке {} файлов в {} папках; готовых {}, конфликтов {}, невозможных {}".format(
-        result.total_files, len(result.to_process), len(result.by_kind(DONE)),
-        len(result.by_kind(CONFLICT)), len(result.blocked)))
+    lines.append("ИТОГО: к обработке {} файлов в {} папках; готовых {}, конфликтов {}, невозможных {}; "
+                 ".jpg -> .jpeg: {} файлов в {} папках".format(
+                     result.total_files, len(result.to_process), len(result.by_kind(DONE)),
+                     len(result.by_kind(CONFLICT)), len(result.blocked),
+                     result.total_renames, len(result.to_rename)))
     return "\n".join(lines)
 
 
@@ -100,6 +122,7 @@ def as_dict(result):
             "creates_archive_dir": plan.creates_archive_dir,
             "two_step_renames": plan.two_step_renames,
             "problems": list(plan.problems),
+            "jpeg_renames": [{"from": old, "to": new} for old, new in plan.jpeg_renames],
             "files": [{
                 "index": planned.index,
                 "source": planned.source,

@@ -7,7 +7,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from curator.transaction.journal import FILE_STATE, FOLDER_STATE, NOTE, SESSION_END, SESSION_START
+from curator.transaction.journal import FILE_STATE, FOLDER_STATE, NOTE, RENAME, SESSION_END, SESSION_START
 
 _FILE_FIELDS = ("source", "jpeg", "archive", "signature", "source_in_archive",
                 "source_hash", "jpeg_hash", "archive_hash")
@@ -29,6 +29,16 @@ class FileRecord:
 
 
 @dataclass
+class RenameRecord:
+    """Переименование на месте (D26). done — подтверждено в журнале."""
+
+    index: int
+    source: str
+    target: str
+    done: bool = False
+
+
+@dataclass
 class FolderRecord:
     folder: str
     files: Dict[int, FileRecord] = field(default_factory=dict)
@@ -36,6 +46,7 @@ class FolderRecord:
     archive_created: bool = False
     state: Optional[str] = None
     session: Optional[dict] = None
+    renames: Dict[int, RenameRecord] = field(default_factory=dict)
 
     def file(self, index):
         if index not in self.files:
@@ -68,6 +79,11 @@ def folders_from_journal(entries):
             record.archive_dir = entry.get("path") or record.archive_dir
         elif kind == FILE_STATE:
             _apply_file_entry(record, entry)
+        elif kind == RENAME and entry.get("n") is not None:
+            rename = record.renames.setdefault(entry["n"], RenameRecord(
+                index=entry["n"], source=entry.get("src", ""), target=entry.get("dst", "")))
+            if entry.get("phase") == "done":
+                rename.done = True
     return folders
 
 

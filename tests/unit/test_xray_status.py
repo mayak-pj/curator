@@ -158,3 +158,26 @@ def test_display_name_is_relative_to_root_and_never_a_dot():
     root = os.path.join("Z:", "Объект")
     assert gui_status.display_name(os.path.join(root, "Шов 1"), root) == "Шов 1"
     assert gui_status.display_name(root, root) == "Объект"
+
+
+def _done_plan(files, archive_files):
+    snapshot = FolderSnapshot(path=os.path.join("R:" + os.sep, "Объект"), files=tuple(files),
+                              archive_dir="ИСХ", archive_files=tuple(archive_files))
+    return plan_folder(snapshot, classify(snapshot, XrayNaming()), XrayNaming())
+
+
+def test_done_folder_with_jpg_shows_planned_rename():
+    plan = _done_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 2.jpg"], ["a.tif", "b.tif"])
+    assert gui_status.initial_status(plan) == ("уже готова · переименовать .jpg → .jpeg: 2", gui_status.NEUTRAL)
+
+
+def test_done_folder_with_occupied_jpeg_name_is_a_warning_not_an_error():
+    plan = _done_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 1.jpeg"], ["a.tif", "b.tif"])
+    text, colour = gui_status.initial_status(plan)
+    assert text.startswith("уже готова, .jpg не переименованы") and colour == gui_status.WARNING
+
+
+def test_renamed_status_and_summary_line():
+    assert gui_status.renamed_status(states.FOLDER_DONE, 3) == ("готово: .jpg → .jpeg, файлов 3", gui_status.SUCCESS)
+    summary = SessionSummary(root="R:", renamed_folders=2, renamed_files=5)
+    assert ".jpg → .jpeg 5 файлов в 2 папках" in gui_status.summary_line(summary)

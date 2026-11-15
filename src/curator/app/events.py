@@ -14,6 +14,7 @@ SCAN_FINISHED = "scan_finished"
 FOLDER_STARTED = "folder_started"
 FOLDER_FINISHED = "folder_finished"
 FOLDER_SKIPPED = "folder_skipped"
+FOLDER_RENAMED = "folder_renamed"  # готовая папка: .jpg -> .jpeg (D26)
 
 FILE_STARTED = "file_started"
 FILE_PREPARED = "file_prepared"

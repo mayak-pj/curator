@@ -56,10 +56,14 @@ STAGE_WEIGHTS = {
 def initial_status(plan):
     """Строка списка сразу после сканирования."""
     kind = plan.decision.kind
-    if plan.problems:
+    if plan.problems and kind != DONE:
         return ("не может быть обработана: " + plan.problems[0], ERROR)
     if kind in (PROCESS_ROOT, PROCESS_FROM_ARCHIVE):
         return ("к обработке: {} файлов".format(len(plan.files)), NEUTRAL)
+    if kind == DONE and plan.problems:
+        return ("уже готова, .jpg не переименованы: " + plan.problems[0], WARNING)
+    if kind == DONE and getattr(plan, "jpeg_renames", ()):
+        return ("уже готова · переименовать .jpg → .jpeg: {}".format(len(plan.jpeg_renames)), NEUTRAL)
     if kind == DONE:
         return ("не обрабатывалась — уже готова", SUCCESS)
     if kind == CONFLICT:
@@ -118,6 +122,13 @@ def folder_status(state, error=None, rolled_back=False):
     return (state, NEUTRAL)
 
 
+def renamed_status(state, files, error=None, rolled_back=False):
+    """Строка готовой папки после .jpg -> .jpeg (D26)."""
+    if state == states.FOLDER_DONE:
+        return ("готово: .jpg → .jpeg, файлов {}".format(files), SUCCESS)
+    return folder_status(state, error, rolled_back)
+
+
 def rollback_status(state, warnings=()):
     if state == ROLLED_BACK:
         return ("возвращена в исходное состояние", NEUTRAL)
@@ -142,6 +153,8 @@ def summary_line(summary):
     ]
     if summary.skipped_locked:
         parts.append("занято другими {}".format(summary.skipped_locked))
+    if getattr(summary, "renamed_folders", 0):
+        parts.append(".jpg → .jpeg {} файлов в {} папках".format(summary.renamed_files, summary.renamed_folders))
     if summary.stopped:
         parts.append("остановлено папок {}".format(len(summary.stopped)))
     if summary.cancelled:

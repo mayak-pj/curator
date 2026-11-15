@@ -100,3 +100,41 @@ def test_long_path_is_refused():
 def test_plan_is_empty_for_non_processable_folders():
     plan = make_plan(["readme.txt"])
     assert plan.files == () and not plan.ok
+
+
+# --- D26: готовая папка, «рентгенограмма….jpg» -> «….jpeg» ------------------------------
+
+def test_done_folder_plans_jpg_to_jpeg_keeping_the_name():
+    plan = make_plan(["Рентгенограмма 1.jpg", "рентгенограмма-2.JPG", "фото.jpg"],
+                     archive_dir="ИСХ", archive_files=["a.tif", "b.tif"])
+    assert plan.decision.kind == "done"
+    assert [(os.path.basename(old), os.path.basename(new)) for old, new in plan.jpeg_renames] == [
+        ("Рентгенограмма 1.jpg", "Рентгенограмма 1.jpeg"),
+        ("рентгенограмма-2.JPG", "рентгенограмма-2.jpeg"),
+    ]
+    assert plan.renames_ok and not plan.ok and not plan.files
+
+
+def test_done_folder_with_jpeg_already_needs_nothing():
+    plan = make_plan(["Рентгенограмма 1.jpeg"], archive_dir="ИСХ", archive_files=["a.tif"])
+    assert plan.jpeg_renames == () and not plan.renames_ok
+
+
+def test_occupied_jpeg_name_leaves_the_folder_untouched():
+    plan = make_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 2.jpg", "Рентгенограмма 2.jpeg"],
+                     archive_dir="ИСХ", archive_files=["a.tif", "b.tif", "c.tif"])
+    assert plan.decision.kind == "done"
+    assert plan.jpeg_renames == () and not plan.renames_ok
+    assert "Рентгенограмма 2.jpeg уже существует" in plan.problems[0]
+
+
+def test_conflict_folder_gets_no_renames():
+    plan = make_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 2.jpg"], archive_dir="ИСХ", archive_files=["a.tif"])
+    assert plan.decision.kind == "conflict"
+    assert plan.jpeg_renames == ()
+
+
+def test_appledouble_jpg_is_not_a_processed_jpeg():
+    plan = make_plan(["Рентгенограмма 1.jpg", "._Рентгенограмма 1.jpg"], archive_dir="ИСХ", archive_files=["a.tif"])
+    assert plan.decision.kind == "done"
+    assert [os.path.basename(old) for old, _ in plan.jpeg_renames] == ["Рентгенограмма 1.jpg"]
