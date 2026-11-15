@@ -3,6 +3,13 @@ name: build-windows
 on:
   push:
     branches: [main]
+    # Коммиты только со служебными документами сборку не запускают (в exe они не попадают).
+    # README.md и TROUBLESHOOTING.md кладутся в сборку — их здесь нет намеренно.
+    paths-ignore:
+      - STATUS.md
+      - ARCHITECTURE.md
+      - BUILD.md
+      - ВЫЕЗД.md
   workflow_dispatch:
 
 permissions:

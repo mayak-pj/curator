@@ -143,7 +143,7 @@ TK_LIBRARY=/Users/macbook/.local/share/uv/python/cpython-3.8.20-macos-aarch64-no
 PYTHONPATH=src .venv/bin/python -c "from curator.gui.main_window import run; run()"
 ```
 
-Сборка запускается автоматически на каждый push в `main`; артефакты — в разделе Actions.
+Сборка запускается автоматически на каждый push в `main`, кроме коммитов, где поменялись только STATUS.md, ARCHITECTURE.md, BUILD.md или ВЫЕЗД.md (`paths-ignore` в workflow); вручную — `gh workflow run build-windows.yml`. Артефакты — в разделе Actions.
 
 ## Договорённости, которые легко забыть
 
