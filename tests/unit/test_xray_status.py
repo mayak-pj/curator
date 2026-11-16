@@ -181,3 +181,17 @@ def test_renamed_status_and_summary_line():
     assert gui_status.renamed_status(states.FOLDER_DONE, 3) == ("готово: .jpg → .jpeg, файлов 3", gui_status.SUCCESS)
     summary = SessionSummary(root="R:", renamed_folders=2, renamed_files=5)
     assert ".jpg → .jpeg 5 файлов в 2 папках" in gui_status.summary_line(summary)
+
+
+def test_conflict_with_jpg_shows_rename_and_stays_a_warning():
+    plan = _done_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 2.jpg"], ["a.tif"])
+    text, colour = gui_status.initial_status(plan)
+    assert "не совпадает" in text and "переименовать .jpg → .jpeg: 2" in text and colour == gui_status.WARNING
+    text, colour = gui_status.renamed_status(states.FOLDER_DONE, 2, conflict="JPEG 2 шт., а TIFF 1 шт.")
+    assert text.startswith(".jpg → .jpeg: 2; TIFF не обработаны") and colour == gui_status.WARNING
+
+
+def test_leaf_folders_skip_service_folders(tmp_path):
+    for name in ("Объект", os.path.join("Объект", "DS"), os.path.join("Объект", "Стар")):
+        os.makedirs(str(tmp_path / name), exist_ok=True)
+    assert gui_status.leaf_folders(str(tmp_path)) == [str(tmp_path / "Объект")]

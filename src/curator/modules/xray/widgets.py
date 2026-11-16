@@ -9,8 +9,8 @@ import html
 
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtWidgets import (
-    QButtonGroup, QDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPlainTextEdit,
-    QPushButton, QRadioButton, QScrollArea, QVBoxLayout, QWidget,
+    QButtonGroup, QCheckBox, QDialog, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QLabel, QPlainTextEdit,
+    QPushButton, QRadioButton, QScrollArea, QSizePolicy, QVBoxLayout, QWidget,
 )
 
 from curator.app.service import CONTINUE, IGNORE, ROLLBACK
@@ -33,8 +33,22 @@ def set_property(widget, name, value):
     widget.style().polish(widget)
 
 
+# Текст строк можно выделить мышью и скопировать (Ctrl+C или правая кнопка → «Копировать»).
+SELECTABLE = Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard
+
+
+def wrapping_label(text=""):
+    """Метка, которая переносит длинный текст и не раздвигает окно (my_reports, 16.11.2026)."""
+    label = QLabel(text)
+    label.setWordWrap(True)
+    label.setTextInteractionFlags(SELECTABLE)
+    label.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+    label.setMinimumWidth(1)
+    return label
+
+
 class FolderRow(QFrame):
-    def __init__(self, name, on_rollback, parent=None):
+    def __init__(self, name, on_rollback, on_skip=None, parent=None):
         super().__init__(parent)
         self.setObjectName("folderRow")
         layout = QGridLayout(self)
@@ -47,13 +61,18 @@ class FolderRow(QFrame):
         self.indicator.setObjectName("rowIndicator")
         self.indicator.setFixedWidth(4)
         layout.addWidget(self.indicator, 0, 0, 2, 1)
-        self.name = QLabel(name)
+        self.name = wrapping_label(name)
         self.name.setProperty("role", "rowTitle")
-        self.name.setTextInteractionFlags(Qt.TextSelectableByMouse)
         layout.addWidget(self.name, 0, 1)
-        self.status = QLabel()
-        self.status.setWordWrap(True)
+        self.status = wrapping_label()
         layout.addWidget(self.status, 1, 1)
+        # «Пропустить»: папка остаётся как есть в этой обработке; отметка не запоминается.
+        self.skip = QCheckBox("пропустить")
+        self.skip.setVisible(False)
+        if on_skip is not None:
+            self.skip.toggled.connect(on_skip)
+        # Та же ячейка, что у «Отменить»: отметка нужна до обработки, кнопка — после, вместе их не бывает.
+        layout.addWidget(self.skip, 0, 2, 2, 1, Qt.AlignVCenter)
         layout.setColumnStretch(1, 1)
         self.button = QPushButton("Отменить")
         self.button.setEnabled(False)
@@ -75,9 +94,10 @@ class FolderRow(QFrame):
 class FolderList(QScrollArea):
     """Список папок: путь, статус цветом и кнопка «Отменить» у строки, где отмена возможна."""
 
-    def __init__(self, on_rollback=None, parent=None):
+    def __init__(self, on_rollback=None, on_skip=None, parent=None):
         super().__init__(parent)
         self.setObjectName("folderList")
+        self._on_skip = on_skip
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self._on_rollback = on_rollback
@@ -108,12 +128,23 @@ class FolderList(QScrollArea):
         self._rows = {}
         self._placeholder.show()
 
-    def set_folders(self, plans, root, status_of):
+    def set_folders(self, plans, root, status_of, skippable=lambda plan: False, skipped=()):
+        """skippable(plan) — показывать ли у строки «пропустить»; skipped — папки, где она уже отмечена."""
         self.clear()
         self._root = root
         for plan in plans:
-            self._add_row(plan.folder, *status_of(plan))
+            row = self._add_row(plan.folder, *status_of(plan))
+            if skippable(plan):
+                row.skip.blockSignals(True)
+                row.skip.setChecked(plan.folder in skipped)
+                row.skip.blockSignals(False)
+                row.skip.setVisible(True)
         self.verticalScrollBar().setValue(0)
+
+    def set_skip_enabled(self, enabled):
+        """Отметки «пропустить» меняются только до начала обработки, не во время неё."""
+        for row in self._rows.values():
+            row.skip.setEnabled(enabled)
 
     def set_status(self, folder, text, colour):
         row = self._rows.get(folder)
@@ -151,7 +182,8 @@ class FolderList(QScrollArea):
     def _add_row(self, folder, text, colour):
         self._placeholder.hide()
         row = FolderRow(status_module.display_name(folder, self._root),
-                        lambda _checked=False, path=folder: self._rollback(path))
+                        lambda _checked=False, path=folder: self._rollback(path),
+                        on_skip=lambda checked, path=folder: self._skip(path, checked))
         row.setToolTip(folder)
         row.set_status(text, colour)
         self._layout.insertWidget(self._layout.count() - 1, row)
@@ -161,6 +193,10 @@ class FolderList(QScrollArea):
     def _rollback(self, folder):
         if self._on_rollback is not None:
             self._on_rollback(folder)
+
+    def _skip(self, folder, checked):
+        if self._on_skip is not None:
+            self._on_skip(folder, checked)
 
 
 class ErrorPanel(QGroupBox):

@@ -10,6 +10,7 @@ import time
 
 from curator.domain import states
 from curator.domain.models import CONFLICT, DONE, EMPTY, PROCESS_FROM_ARCHIVE, PROCESS_ROOT
+from curator.domain.naming import is_skipped_dir
 from curator.transaction.rollback import NOTHING, PARTIAL, ROLLED_BACK
 
 # Ключи цветов; конкретные значения — в theme.py
@@ -24,6 +25,11 @@ RUNNING = "running"
 NO_IMAGES = "TIFF-файлов нет — проверьте, не пропали ли снимки"
 
 WAITING = ("ожидает", NEUTRAL)
+
+# Служебная папка (DS, Datasheet, Стар…): программа в неё не заходит (D27). Вид строки — не решение правил.
+SKIPPED = "skipped"
+SKIPPED_TEXT = "пропущена: служебная папка, не читается"
+MANUAL_SKIP_TEXT = "пропущена вручную, не изменена"
 
 # Подписи шагов конвертации и сетевых шагов (executor.py шлёт их байтовым
 # прогрессом) — без них статус часами не меняется на "encode 100 %", пока
@@ -56,7 +62,7 @@ STAGE_WEIGHTS = {
 def initial_status(plan):
     """Строка списка сразу после сканирования."""
     kind = plan.decision.kind
-    if plan.problems and kind != DONE:
+    if plan.problems and kind not in (DONE, CONFLICT):
         return ("не может быть обработана: " + plan.problems[0], ERROR)
     if kind in (PROCESS_ROOT, PROCESS_FROM_ARCHIVE):
         return ("к обработке: {} файлов".format(len(plan.files)), NEUTRAL)
@@ -66,11 +72,22 @@ def initial_status(plan):
         return ("уже готова · переименовать .jpg → .jpeg: {}".format(len(plan.jpeg_renames)), NEUTRAL)
     if kind == DONE:
         return ("не обрабатывалась — уже готова", SUCCESS)
+    if kind == CONFLICT and plan.problems:
+        return ("{}; .jpg не переименованы: {}".format(plan.decision.reason, plan.problems[0]), WARNING)
+    if kind == CONFLICT and getattr(plan, "jpeg_renames", ()):
+        return ("{} · переименовать .jpg → .jpeg: {}".format(plan.decision.reason, len(plan.jpeg_renames)), WARNING)
     if kind == CONFLICT:
         return (plan.decision.reason, WARNING)
     if kind == EMPTY:
         return (NO_IMAGES, WARNING)
+    if kind == SKIPPED:
+        return (SKIPPED_TEXT, NEUTRAL)
     return WAITING
+
+
+def actionable(plan):
+    """Папка, которую «Начать обработку» изменит: у неё есть отметка «пропустить»."""
+    return bool(getattr(plan, "ok", False) or getattr(plan, "renames_ok", False))
 
 
 def leaf_folders(root):
@@ -80,7 +97,8 @@ def leaf_folders(root):
     снимки пропали по ошибке (родительские папки пустыми не считаются)."""
     leaves = []
     for directory, subdirectories, _files in os.walk(root):
-        subdirectories[:] = [name for name in subdirectories if name.lower().replace("ё", "е") != "исх"]
+        subdirectories[:] = [name for name in subdirectories
+                             if name.lower().replace("ё", "е") != "исх" and not is_skipped_dir(name)]
         if not subdirectories:
             leaves.append(directory)
     return leaves
@@ -122,8 +140,10 @@ def folder_status(state, error=None, rolled_back=False):
     return (state, NEUTRAL)
 
 
-def renamed_status(state, files, error=None, rolled_back=False):
-    """Строка готовой папки после .jpg -> .jpeg (D26)."""
+def renamed_status(state, files, error=None, rolled_back=False, conflict=None):
+    """Строка папки после .jpg -> .jpeg (D26). conflict — причина конфликта: TIFF остались необработанными."""
+    if state == states.FOLDER_DONE and conflict:
+        return (".jpg → .jpeg: {}; TIFF не обработаны — {}".format(files, conflict), WARNING)
     if state == states.FOLDER_DONE:
         return ("готово: .jpg → .jpeg, файлов {}".format(files), SUCCESS)
     return folder_status(state, error, rolled_back)
@@ -155,6 +175,8 @@ def summary_line(summary):
         parts.append("занято другими {}".format(summary.skipped_locked))
     if getattr(summary, "renamed_folders", 0):
         parts.append(".jpg → .jpeg {} файлов в {} папках".format(summary.renamed_files, summary.renamed_folders))
+    if getattr(summary, "skipped_manual", 0):
+        parts.append("пропущено вручную {}".format(summary.skipped_manual))
     if summary.stopped:
         parts.append("остановлено папок {}".format(len(summary.stopped)))
     if summary.cancelled:

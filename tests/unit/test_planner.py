@@ -128,10 +128,13 @@ def test_occupied_jpeg_name_leaves_the_folder_untouched():
     assert "Рентгенограмма 2.jpeg уже существует" in plan.problems[0]
 
 
-def test_conflict_folder_gets_no_renames():
+def test_conflict_folder_renames_jpg_but_leaves_tiffs():
+    # Папка частично обработана руками: 2 JPG, 1 TIFF — .jpg приводим к .jpeg, TIFF не трогаем.
     plan = make_plan(["Рентгенограмма 1.jpg", "Рентгенограмма 2.jpg"], archive_dir="ИСХ", archive_files=["a.tif"])
     assert plan.decision.kind == "conflict"
-    assert plan.jpeg_renames == ()
+    assert [os.path.basename(new) for _, new in plan.jpeg_renames] == [
+        "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg"]
+    assert plan.renames_ok and not plan.ok and not plan.files
 
 
 def test_appledouble_jpg_is_not_a_processed_jpeg():

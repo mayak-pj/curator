@@ -18,6 +18,8 @@ CONFLICT = "conflict"
 EMPTY = "empty"
 
 PROCESSABLE = (PROCESS_ROOT, PROCESS_FROM_ARCHIVE)
+# Где «рентгенограмма….jpg» приводится к .jpeg (D26): готовые и конфликтные — частично обработанные руками.
+RENAMABLE = (DONE, CONFLICT)
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,7 @@ class FolderPlan:
     # Переименование внутри архива, где целевое имя занято другим исходником,
     # выполняется через временные имена (этап 4).
     two_step_renames: bool = False
-    # Готовая папка (R1): JPEG «рентгенограмма….jpg» -> «….jpeg», пары (старый путь, новый путь); D26.
+    # Готовая или конфликтная папка: JPEG «рентгенограмма….jpg» -> «….jpeg», пары (старый путь, новый путь); D26.
     jpeg_renames: Tuple[Tuple[str, str], ...] = ()
 
     @property
@@ -94,7 +96,7 @@ class FolderPlan:
 
     @property
     def renames_ok(self):
-        return self.decision.kind == DONE and not self.problems and bool(self.jpeg_renames)
+        return self.decision.kind in RENAMABLE and not self.problems and bool(self.jpeg_renames)
 
 
 def _is_tiff(name):

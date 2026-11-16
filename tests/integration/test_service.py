@@ -327,10 +327,60 @@ def test_failure_in_the_middle_of_jpg_renames_is_rolled_back(tmp_path, monkeypat
     assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
 
 
-def test_conflict_folder_with_jpg_is_not_touched(tmp_path):
+def test_conflict_folder_gets_jpg_renamed_and_tiffs_left_alone(tmp_path):
     root, folder = done_folder_with_jpg(tmp_path)
     os.remove(os.path.join(folder, "ИСХ", "снимок б.tif"))  # JPEG 2, TIFF 1 — конфликт
+    for name in ("снимок в.tif", "снимок г.tif"):  # и TIFF в самой папке: JPEG 2, TIFF 3
+        with open(os.path.join(folder, name), "wb") as stream:
+            stream.write(b"tif")
+    events = []
 
-    summary = make_service(tmp_path).start(root)
-    assert summary.renamed_folders == 0
-    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
+    service = make_service(tmp_path, on_event=events.append)
+    summary = service.start(root)
+    assert summary.renamed_folders == 1 and summary.renamed_files == 2 and not summary.outcomes
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpeg", "Рентгенограмма 2.jpeg", "снимок в.tif", "снимок г.tif"]
+    assert listing(os.path.join(folder, "ИСХ")) == ["снимок а.tif"]
+    renamed = [event for event in events if event["kind"] == ev.FOLDER_RENAMED][0]
+    assert "не совпадает" in renamed["conflict"]
+
+    assert service.rollback_folder(folder).complete
+    assert listing(folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG", "снимок в.tif", "снимок г.tif"]
+
+
+def test_service_folders_are_skipped_and_reported(tmp_path):
+    root, folder = done_folder_with_jpg(tmp_path)
+    for name in ("DS", "Datasheet", "Стар", "старо", "STAR", "Staro"):
+        hidden = os.path.join(folder, name)
+        os.makedirs(hidden)
+        with open(os.path.join(hidden, "Рентгенограмма 1.jpg"), "wb") as stream:
+            stream.write(b"x")
+        with open(os.path.join(hidden, "снимок.tif"), "wb") as stream:
+            stream.write(b"y")
+    os.makedirs(os.path.join(folder, "Старое"))  # не служебная: имя сравнивается целиком
+
+    service = make_service(tmp_path)
+    scan = service.scan(root)
+    assert sorted(os.path.basename(path) for path in scan.skipped_dirs) == sorted(
+        ["DS", "Datasheet", "Стар", "старо", "STAR", "Staro"])
+    assert all(os.path.basename(plan.folder) not in ("DS", "Стар") for plan in scan.plans)
+
+    service.start(root)
+    for name in ("DS", "Стар", "Staro"):
+        assert listing(os.path.join(folder, name)) == ["Рентгенограмма 1.jpg", "снимок.tif"]
+
+
+def test_folders_marked_skip_are_left_alone(tmp_path):
+    root = tree_with_two_folders(tmp_path)
+    _, done_folder = done_folder_with_jpg(tmp_path)
+    skipped = os.path.join(root, "Объект 001")
+    events = []
+
+    summary = make_service(tmp_path, on_event=events.append).start(root, skip={skipped, done_folder})
+    assert summary.skipped_manual == 2 and summary.renamed_folders == 0
+    assert len(summary.succeeded) == 1
+    assert listing(skipped) == ["1.tif", "2.tif"]
+    assert listing(done_folder) == ["ИСХ", "Рентгенограмма 1.jpg", "Рентгенограмма 2.JPG"]
+    manual = [event["folder"] for event in events if event["kind"] == ev.FOLDER_SKIPPED and event.get("manual")]
+    assert sorted(manual) == sorted([skipped, done_folder])
+    started = [event for event in events if event["kind"] == ev.SESSION_STARTED][0]
+    assert started["files"] == 1  # полоса прогресса считает только то, что будет обработано

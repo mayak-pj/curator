@@ -7,7 +7,7 @@
 
 import os
 
-from curator.domain.models import DONE, PROCESS_FROM_ARCHIVE, FolderPlan, PlannedFile
+from curator.domain.models import PROCESS_FROM_ARCHIVE, RENAMABLE, FolderPlan, PlannedFile
 from curator.domain.naming import normalize
 from curator.domain.ordering import natural_sorted
 
@@ -18,7 +18,7 @@ PART_SUFFIX = ".part"
 
 def plan_folder(snapshot, decision, naming, max_path=MAX_PATH):
     """FolderSnapshot + FolderDecision -> FolderPlan (ничего не меняя на диске)."""
-    if decision.kind == DONE:
+    if decision.kind in RENAMABLE:
         renames, problems = _jpeg_renames(snapshot, naming, max_path)
         return FolderPlan(folder=snapshot.path, decision=decision,
                           jpeg_renames=tuple(renames), problems=tuple(problems))
@@ -54,7 +54,8 @@ def plan_folder(snapshot, decision, naming, max_path=MAX_PATH):
 
 
 def _jpeg_renames(snapshot, naming, max_path):
-    """Готовая папка: «рентгенограмма….jpg» -> «….jpeg», имя без изменений (D26).
+    """Готовая или конфликтная папка: «рентгенограмма….jpg» -> «….jpeg», имя без изменений (D26).
+    В конфликтной TIFF и архив не трогаются — она остаётся конфликтом.
 
     Занятое новое имя или слишком длинный путь — папку не трогаем совсем."""
     existing = {normalize(name) for name in snapshot.files}

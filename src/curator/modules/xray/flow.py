@@ -48,6 +48,8 @@ FRAME_MS = 33
 SCENE_RADIUS = 10
 CLIP_MARGIN_TOP = 12
 HOLD_S = 1.0               # после папки её итог держится на экране, прежде чем откроется следующая
+RENAME_GAP_S = 0.15        # .jpg -> .jpeg: интервал между файлами (D26)
+RENAME_HOLD_S = 0.6        # итог папки с переименованием держится короче: таких папок бывает много подряд
 
 TILE_W, TILE_H = 104, 100
 HEADER_H, FOOTER_H, ARCHIVE_W = 44, 76, 128
@@ -128,6 +130,16 @@ class FileState:
         self.jpeg_fraction = 1.0
 
 
+class _RenamedFile:
+    """Файл папки с переименованием в виде, который понимает FileState: было -> стало."""
+
+    def __init__(self, index, old, new):
+        self.index = index
+        self.source = old
+        self.jpeg = new
+        self.archive = old
+
+
 class Palette:
     """Цвета сцены — токены темы."""
 
@@ -164,6 +176,7 @@ class Scene(QWidget):
         self._fly_slot = 0.0
         self._done_slot = 0.0
         self._focus = None           # индекс файла, на котором «камера»
+        self.renaming = False        # режим «.jpg -> .jpeg»: без архива и без шагов конвертации (D26)
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
 
@@ -171,6 +184,7 @@ class Scene(QWidget):
 
     def open_folder(self, name, planned_files):
         now = self._clock()
+        self.renaming = False
         self.folder_name = name
         self.tiles, self.order = {}, []
         self.archived, self.bump_at, self.lid_close_at = 0, None, None
@@ -184,7 +198,24 @@ class Scene(QWidget):
             self.order.append(tile)
         self._wake()
 
+    def open_renames(self, name, renames):
+        """Папка, где «….jpg» становятся «….jpeg»: плитки JPG по очереди меняют подпись и получают галочку.
+        Возвращает момент, когда показ закончится (переименование на диске уже выполнено)."""
+        self.open_folder(name, [_RenamedFile(index, old, new)
+                                for index, (old, new) in enumerate(renames, start=1)])
+        self.renaming = True
+        start = self._clock() + LID_S * 0.6 + APPEAR_S
+        for position, tile in enumerate(self.order):
+            tile.phase = COMPLETED
+            tile.done_steps = set()
+            tile.done_at = start + position * RENAME_GAP_S
+        finish = start + len(self.order) * RENAME_GAP_S + RENAME_S
+        self.lid_close_at = finish
+        self._wake()
+        return finish
+
     def reset(self):
+        self.renaming = False
         self.tiles, self.order, self.folder_name = {}, [], ""
         self.archived, self.bump_at, self.lid_open_at, self.lid_close_at = 0, None, None, None
         self._focus = None
@@ -225,6 +256,10 @@ class Scene(QWidget):
         tile = self.current_tile()
         if not total:
             return ""
+        if self.renaming:
+            now = self._clock()
+            done = sum(1 for t in self.order if t.done_at is not None and now >= t.done_at)
+            return ".jpg → .jpeg: переименовано {} из {}".format(done, total)
         if tile is not None and tile.phase == RUNNING:
             return "Файл {} из {}:  {}".format(tile.index, total, tile.before)
         done = sum(1 for t in self.order if t.phase == COMPLETED)
@@ -298,9 +333,11 @@ class Scene(QWidget):
             return
         now = self._clock()
         self._paint_header(painter, now, width)
-        grid = QRectF(12, HEADER_H + 10, width - ARCHIVE_W - 24, height - HEADER_H - 10 - FOOTER_H)
+        archive_w = 0 if self.renaming else ARCHIVE_W
+        grid = QRectF(12, HEADER_H + 10, width - archive_w - 24, height - HEADER_H - 10 - FOOTER_H)
         archive = self._archive_rect(width, height)
-        self._paint_archive(painter, archive, now)
+        if not self.renaming:
+            self._paint_archive(painter, archive, now)
         self._paint_tiles(painter, grid, archive, now)
         self._paint_footer(painter, now, width, height)
 
@@ -398,6 +435,10 @@ class Scene(QWidget):
         p.scale(pop, pop)
         p.translate(-rect.center())
         card = rect.adjusted(6, 4, -6, -4)
+        if self.renaming:
+            self._paint_renamed(p, tile, rect, now, done)
+            p.restore()
+            return
         running = tile.phase == RUNNING
         if running:
             pulse = 0.5 + 0.5 * math.sin(now * 5)
@@ -445,6 +486,23 @@ class Scene(QWidget):
         self._paint_name(p, tile, rect, now, done)
         p.restore()
 
+    def _paint_renamed(self, p, tile, rect, now, done):
+        """JPG -> JPEG: тот же документ, подпись меняется, цвет набирается, галочка — когда имя сменилось."""
+        colour = self.palette_of
+        icon_size = 44
+        icon = QRectF(rect.center().x() - icon_size / 2, rect.top() + 10, icon_size, icon_size)
+        mix = ease_in_out((now - tile.done_at) / RENAME_S) if done else 0.0
+        if mix < 1:
+            p.setOpacity(1 - mix)
+            self._draw_document(p, icon, "JPG", colour("text_muted"), colour("on_accent"))
+        if mix > 0:
+            p.setOpacity(mix)
+            self._draw_document(p, icon, "JPEG", colour("success"), colour("on_accent"))
+        p.setOpacity(1.0)
+        if done:
+            self._paint_check(p, QPointF(icon.right() + 2, icon.top() - 2), colour("success"), now - tile.done_at)
+        self._paint_name(p, tile, rect, now, done)
+
     def _paint_name(self, p, tile, rect, now, done):
         colour = self.palette_of
         font = QFont(self.font())
@@ -486,6 +544,23 @@ class Scene(QWidget):
         p.setPen(colour("text"))
         p.drawText(QRectF(14, top + 6, width - 28, 22), Qt.AlignVCenter,
                    p.fontMetrics().elidedText(self.caption, Qt.ElideMiddle, int(width - 28)))
+        if self.renaming:
+            rect = QRectF(14, top + 36, width - 28, 28)
+            finished = all(t.done_at is not None and now >= t.done_at + RENAME_S for t in self.order)
+            path = QPainterPath()
+            path.addRoundedRect(rect, 14, 14)
+            font.setPixelSize(12)
+            p.setFont(font)
+            if finished:
+                p.fillPath(path, colour("success", 0.15))
+                p.setPen(colour("success"))
+            else:
+                p.fillPath(path, colour("accent_soft"))
+                p.setPen(QPen(colour("accent"), 2))
+                p.drawPath(path)
+                p.setPen(colour("accent"))
+            p.drawText(rect, Qt.AlignCenter, ("✓ " if finished else "") + "переименование .jpg → .jpeg")
+            return
         tile = self.current_tile()
         pill_w = (width - 28 - 3 * 8) / 4
         font.setPixelSize(12)
@@ -682,6 +757,9 @@ class FileFlow(QFrame):
     def folder_finished(self):
         self._dispatch(self._folder_finished)
 
+    def folder_renamed(self, folder):
+        self._dispatch(self._folder_renamed, folder)
+
     def _dispatch(self, handler, *args):
         self._queue.append((handler, args))
         self._drain()
@@ -736,6 +814,15 @@ class FileFlow(QFrame):
         if self.scene.order:
             self.scene.folder_closed()
             self._hold_until = self._clock() + HOLD_S
+
+    def _folder_renamed(self, folder):
+        self.scene.reset()
+        plan = self._plans.get(folder)
+        renames = getattr(plan, "jpeg_renames", ())
+        if not self.enabled or not renames:
+            return
+        name = os.path.basename(os.path.normpath(folder)) or folder
+        self._hold_until = self.scene.open_renames(name, renames) + RENAME_HOLD_S
 
     def clear(self):
         self._queue = []

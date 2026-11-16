@@ -8,20 +8,26 @@
 import os
 
 from curator.domain.models import FolderSnapshot
+from curator.domain.naming import is_skipped_dir
 from curator.domain.ordering import natural_key
 
 
-def scan_tree(root, naming, on_error=None):
+def scan_tree(root, naming, on_error=None, skipped=None):
     """Снимки всех папок дерева, включая корневую.
 
     on_error(path, exception) вызывается для папок, которые не удалось
     прочитать (нет прав, оборвалась сеть); обход продолжается.
+    skipped — список, куда складываются пути служебных папок (D27): в них не заходим.
     """
     snapshots = []
     for directory, subdirectories, files in os.walk(root, onerror=lambda exc: _report(on_error, exc)):
         archive_dir = None
         for name in list(subdirectories):
-            if naming.is_archive_dir(name):
+            if is_skipped_dir(name):
+                subdirectories.remove(name)
+                if skipped is not None:
+                    skipped.append(os.path.join(directory, name))
+            elif naming.is_archive_dir(name):
                 archive_dir = name
                 subdirectories.remove(name)  # не спускаемся в архив
         subdirectories.sort(key=natural_key)

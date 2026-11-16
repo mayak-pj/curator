@@ -25,7 +25,7 @@ from curator.domain.errors import CuratorError
 from curator.domain.ordering import natural_key
 from curator.modules.xray import status as status_module
 from curator.modules.xray.flow import FileFlow
-from curator.modules.xray.widgets import ErrorPanel, FolderList, RecoveryDialog, set_property
+from curator.modules.xray.widgets import SELECTABLE, ErrorPanel, FolderList, RecoveryDialog, set_property
 from curator.platform import state
 from curator.platform.worker import TASK_DONE, TASK_FAILED, Worker
 from curator.transaction.rollback import NOTHING, ROLLED_BACK
@@ -63,6 +63,7 @@ def _muted(text=""):
     label = QLabel(text)
     label.setProperty("muted", True)
     label.setWordWrap(True)
+    label.setTextInteractionFlags(SELECTABLE)   # текст можно выделить и скопировать
     return label
 
 
@@ -75,9 +76,13 @@ class XrayPage(QWidget):
         self.summary = None
         self.processed_folders = []
         self.empty_folders = []
+        self.skip_folders = set()  # отмечены «пропустить»; сбрасывается при «Проверить», не запоминается
+        self._working = False
+        self._processing = False   # идёт «Начать обработку» (а не «Проверить»)
         self._leaves = []
         self._finished_status = {}
         self._rolled_back = set()
+        self._before_rollback = {}
         self.progress_model = status_module.SessionProgress()
         self._current_folder = None
         self._current_folder_files = 0
@@ -175,7 +180,7 @@ class XrayPage(QWidget):
 
         splitter = self.splitter = QSplitter(Qt.Vertical)
         splitter.setChildrenCollapsible(False)
-        self.folders = FolderList(on_rollback=self._rollback_folder)
+        self.folders = FolderList(on_rollback=self._rollback_folder, on_skip=self._toggle_skip)
         self.flow = FileFlow(enabled=state.load(self.context.paths.gui_state).get("show_flow", True),
                              on_toggle=lambda checked: state.save(self.context.paths.gui_state, show_flow=checked))
         self.errors = ErrorPanel()
@@ -183,8 +188,8 @@ class XrayPage(QWidget):
         lists.setChildrenCollapsible(False)
         lists.addWidget(self.folders)
         lists.addWidget(self.flow)
-        lists.setStretchFactor(0, 1)
-        lists.setStretchFactor(1, 2)
+        lists.setStretchFactor(0, 2)
+        lists.setStretchFactor(1, 3)
         splitter.addWidget(lists)
         splitter.addWidget(self.errors)
         splitter.setStretchFactor(0, 1)
@@ -254,6 +259,7 @@ class XrayPage(QWidget):
         self.folders.clear()
         self.flow.clear()
         self.errors.clear()
+        self.skip_folders = set()
         self._busy("Проверка папок…")
         self.worker.submit("scan", self._scan_task, root)
 
@@ -266,17 +272,24 @@ class XrayPage(QWidget):
         self.processed_folders = []
         self._finished_status = {}
         self._rolled_back = set()
+        self._processing = True
         self._busy("Обработка…")
         self.stop_button.setEnabled(True)
-        self.worker.submit("start", self._start_task, root)
+        self.worker.submit("start", self._start_task, root, set(self.skip_folders))
 
     def _scan_task(self, root):
         self._leaves = status_module.leaf_folders(root)
         return self.service.scan(root)
 
-    def _start_task(self, root):
+    def _start_task(self, root, skip=()):
         self._leaves = status_module.leaf_folders(root)
-        return self.service.start(root)
+        return self.service.start(root, skip=skip)
+
+    def _toggle_skip(self, folder, checked):
+        if checked:
+            self.skip_folders.add(folder)
+        else:
+            self.skip_folders.discard(folder)
 
     def _stop(self):
         self.service.cancel()
@@ -327,9 +340,20 @@ class XrayPage(QWidget):
             self._on_folder_finished(event)
         elif kind == ev.FOLDER_RENAMED:
             self._on_folder_renamed(event)
+        elif kind == ev.FOLDER_SKIPPED and event.get("manual"):
+            self.folders.set_status(event["folder"], status_module.MANUAL_SKIP_TEXT, status_module.NEUTRAL)
         elif kind == ev.FOLDER_SKIPPED:
             self.folders.set_status(event["folder"], "пропущена: занята другим пользователем", status_module.WARNING)
             self.errors.add(event["reason"], "warning", event["folder"])
+        elif kind == ev.ROLLBACK_STARTED:
+            # Откат папки с сотнями мегабайт идёт заметное время: видно, какая папка сейчас отменяется.
+            folder = event["folder"]
+            row = self.folders.rows.get(folder)
+            if row is not None:   # если менять окажется нечего — вернём прежнюю строку
+                self._before_rollback[folder] = (row.status.text(), row.status.property("tone"))
+            self.folders.set_status(folder, "отменяется…", status_module.RUNNING)
+            self.folders.show_folder(folder)
+            self._say("Отмена: {}…".format(status_module.display_name(folder, self._root_of_scan())))
         elif kind == ev.FILE_STARTED:
             # Строка папки и строка под полосой берут номер файла из одного и того
             # же события — иначе они на время расходятся (my_reports, 01.10.2026).
@@ -378,8 +402,15 @@ class XrayPage(QWidget):
         processing = result.to_process
         others = sorted([plan for plan in result.plans if plan.decision.kind != "empty" and plan not in processing]
                         + empty, key=lambda plan: natural_key(plan.folder))
-        plans = processing + others
-        self.folders.set_folders(plans, result.root, status_module.initial_status)
+        # Служебные папки (DS, Datasheet, Стар…) — внизу списка: видно, что их не забыли, а пропустили (D27).
+        service_dirs = [SimpleNamespace(folder=folder, decision=SimpleNamespace(kind=status_module.SKIPPED),
+                                        problems=()) for folder in getattr(result, "skipped_dirs", ())]
+        plans = processing + others + service_dirs
+        # Во время обработки отметки не показываем: их место занимает «Отменить», а итог виден в статусе.
+        skippable = (lambda plan: False) if self._processing else status_module.actionable
+        self.folders.set_folders(plans, result.root, status_module.initial_status,
+                                 skippable=skippable, skipped=self.skip_folders)
+        self.folders.set_skip_enabled(not self._working)
         text = "К обработке {} файлов в {} папках · уже готовых {} · конфликтов {}".format(
             result.total_files, len(result.to_process),
             len(result.by_kind("done")), len(result.by_kind("conflict")))
@@ -387,6 +418,8 @@ class XrayPage(QWidget):
             text += " · .jpg → .jpeg: {} файлов в {} папках".format(result.total_renames, len(result.to_rename))
         if empty:
             text += " · папок без снимков {}".format(len(empty))
+        if service_dirs:
+            text += " · служебных папок пропущено {}".format(len(service_dirs))
         self.current_label.setText(text)
         self.empty_folders = [plan.folder for plan in empty]
         for plan in empty:
@@ -416,17 +449,23 @@ class XrayPage(QWidget):
                 and event["state"] != states.FOLDER_CANCELLED:
             self.errors.add(text, "error" if colour == status_module.ERROR else "warning", folder)
 
+    def _root_of_scan(self):
+        return self.scan_result.root if self.scan_result is not None else self._selected_root() or ""
+
     def _on_folder_renamed(self, event):
-        """Готовая папка: .jpg -> .jpeg (D26). Откат — той же кнопкой «Отменить», что и у обработки."""
+        """Готовая или конфликтная папка: .jpg -> .jpeg (D26). Откат — той же кнопкой «Отменить»."""
         folder = event["folder"]
+        if event["state"] == states.FOLDER_DONE:
+            self.flow.folder_renamed(folder)
         text, colour = status_module.renamed_status(event["state"], event.get("files", 0),
-                                                    event.get("error"), event.get("rolled_back", False))
+                                                    event.get("error"), event.get("rolled_back", False),
+                                                    event.get("conflict"))
         self.folders.set_status(folder, text, colour)
         if status_module.can_rollback(event["state"]) and not event.get("rolled_back") \
                 and folder not in self.processed_folders:
             self.folders.set_rollback_enabled(folder, True)
             self.processed_folders.append(folder)
-        if colour in (status_module.ERROR, status_module.WARNING):
+        if colour == status_module.ERROR or (colour == status_module.WARNING and not event.get("conflict")):
             self.errors.add(text, "error" if colour == status_module.ERROR else "warning", folder)
 
     def _on_rollback_finished(self, event):
@@ -434,8 +473,11 @@ class XrayPage(QWidget):
         text, colour = status_module.rollback_status(event["state"], event.get("warnings", ()))
         # «Отменить всё» проходит и по папкам, где менять нечего (остановленные, уже возвращённые):
         # их прежний статус («остановлено, папка не изменена», «возвращена…») не затираем.
+        previous = self._before_rollback.pop(folder, None)
         if event["state"] != NOTHING:
             self.folders.set_status(folder, text, colour)
+        elif previous is not None:
+            self.folders.set_status(folder, *previous)
         if event["state"] == ROLLED_BACK:
             self._rolled_back.add(folder)
         self.folders.set_rollback_enabled(folder, False)
@@ -551,12 +593,17 @@ class XrayPage(QWidget):
         set_property(self.status_label, "tone", tone or status_module.NEUTRAL)
 
     def _busy(self, message):
+        self._working = True
+        self.folders.set_skip_enabled(False)
         self._say(message)
         for button in (self.scan_button, self.start_button, self.accept_button, self.rollback_all_button):
             button.setEnabled(False)
         self.folders.disable_all_rollback()
 
     def _idle(self):
+        self._working = False
+        self._processing = False
+        self.folders.set_skip_enabled(True)
         self.scan_button.setEnabled(True)
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)

@@ -22,6 +22,7 @@ class ScanResult:
     folders_seen: int = 0
     plans: List = field(default_factory=list)
     errors: List[Tuple[str, Exception]] = field(default_factory=list)
+    skipped_dirs: List[str] = field(default_factory=list)  # служебные папки (D27), в них не заходили
 
     def by_kind(self, kind):
         return [plan for plan in self.plans if plan.decision.kind == kind]
@@ -57,7 +58,8 @@ def scan_root(root, naming=None, rules=folder_rules.DEFAULT_NAME, include_empty=
     naming = naming or XrayNaming()
     classify = folder_rules.get(rules)
     result = ScanResult(root=os.path.abspath(root), rules=rules)
-    snapshots = scan_tree(root, naming, on_error=lambda path, exc: result.errors.append((path, exc)))
+    snapshots = scan_tree(root, naming, on_error=lambda path, exc: result.errors.append((path, exc)),
+                          skipped=result.skipped_dirs)
     result.folders_seen = len(snapshots)
     for snapshot in snapshots:
         decision = classify(snapshot, naming)
@@ -94,6 +96,11 @@ def render_report(result, full=False, max_files=3):
     _group(lines, "КОНФЛИКТЫ (папка не тронута)", result.by_kind(CONFLICT), result.root, full, max_files)
     _group(lines, "ОБРАБОТКА НЕВОЗМОЖНА", result.blocked, result.root, full, max_files, show_problems=True)
 
+    if result.skipped_dirs:
+        lines.append("ПРОПУЩЕНЫ (служебные папки, не читались) ({}):".format(len(result.skipped_dirs)))
+        lines.extend("  {}".format(_relative(path, result.root)) for path in result.skipped_dirs)
+        lines.append("")
+
     if result.errors:
         lines.append("Не удалось прочитать ({}):".format(len(result.errors)))
         lines.extend("  {} — {}".format(path, exc) for path, exc in result.errors)
@@ -113,6 +120,7 @@ def as_dict(result):
         "rules": result.rules,
         "folders_seen": result.folders_seen,
         "errors": [{"path": path, "error": str(exc)} for path, exc in result.errors],
+        "skipped_dirs": list(result.skipped_dirs),
         "folders": [{
             "path": plan.folder,
             "decision": plan.decision.kind,

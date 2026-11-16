@@ -29,6 +29,13 @@ LAYOUT = {
 DONE_FOLDER = "Объект 003 готов"
 DONE_JPEGS = {"Рентгенограмма 1.jpg": b"jpeg-1", "Рентгенограмма 2.JPG": b"jpeg-2"}
 DONE_ARCHIVE = {"снимок а.tif": b"tif-a", "снимок б.tif": b"tif-b"}
+# Конфликт, частично обработанный руками: 2 JPG, 3 TIFF — .jpg становятся .jpeg, TIFF не трогаются.
+CONFLICT_FOLDER = "Объект 004 конфликт"
+CONFLICT_JPEGS = {"Рентгенограмма 1.jpg": b"jpeg-c1", "Рентгенограмма 2.jpg": b"jpeg-c2"}
+CONFLICT_TIFFS = {"снимок 1.tif": b"tif-c1", "снимок 2.tif": b"tif-c2", "снимок 3.tif": b"tif-c3"}
+# Служебные папки (D27): программа в них не заходит — содержимое не меняется ни при каком сценарии.
+SERVICE_DIRS = (os.path.join("Объект 001", "Стар"), os.path.join("Объект 003 готов", "Datasheet"))
+SERVICE_FILES = {"снимок.tif": b"tif-s", "Рентгенограмма 1.jpg": b"jpeg-s"}
 HASHES_FILE = "hashes.json"
 WIDTH, HEIGHT = 800, 600
 
@@ -59,6 +66,13 @@ def create(root):
         _write(os.path.join(root, DONE_FOLDER, name), data)
     for name, data in DONE_ARCHIVE.items():
         _write(os.path.join(root, DONE_FOLDER, "ИСХ", name), data)
+    os.makedirs(os.path.join(root, CONFLICT_FOLDER))
+    for name, data in list(CONFLICT_JPEGS.items()) + list(CONFLICT_TIFFS.items()):
+        _write(os.path.join(root, CONFLICT_FOLDER, name), data)
+    for relative in SERVICE_DIRS:
+        os.makedirs(os.path.join(root, relative))
+        for name, data in SERVICE_FILES.items():
+            _write(os.path.join(root, relative, name), data)
     with open(os.path.join(root, HASHES_FILE), "w", encoding="utf-8") as stream:
         json.dump(hashes, stream, ensure_ascii=False, indent=1)
     print("создано дерево: {} файлов в {} папках".format(sum(len(v) for v in LAYOUT.values()), len(LAYOUT)))
@@ -106,6 +120,8 @@ def check(root, state):
                     problems.append("{}: размер {} не совпадает с исходником".format(name, (image.width, image.height)))
 
     problems.extend(_check_done_folder(root, state))
+    problems.extend(_check_conflict_folder(root, state))
+    problems.extend(_check_service_dirs(root))
     if problems:
         print("ПРОБЛЕМЫ:")
         for problem in problems:
@@ -120,7 +136,7 @@ def _check_done_folder(root, state):
     problems = []
     expected = {name if state == "original" else os.path.splitext(name)[0] + ".jpeg": data
                 for name, data in DONE_JPEGS.items()}
-    present = sorted(name for name in os.listdir(folder) if name != "ИСХ")
+    present = sorted(name for name in os.listdir(folder) if os.path.isfile(os.path.join(folder, name)))
     if present != sorted(expected):
         problems.append("{}: файлы {} вместо {}".format(folder, present, sorted(expected)))
     for name, data in expected.items():
@@ -129,6 +145,27 @@ def _check_done_folder(root, state):
             problems.append("{}: содержимое {} изменилось".format(folder, name))
     if sorted(os.listdir(os.path.join(folder, "ИСХ"))) != sorted(DONE_ARCHIVE):
         problems.append("{}: архив ИСХ изменился".format(folder))
+    return problems
+
+
+def _check_conflict_folder(root, state):
+    folder = os.path.join(root, CONFLICT_FOLDER)
+    expected = {name if state == "original" else os.path.splitext(name)[0] + ".jpeg": data
+                for name, data in CONFLICT_JPEGS.items()}
+    expected.update(CONFLICT_TIFFS)
+    present = sorted(os.listdir(folder))
+    if present != sorted(expected):
+        return ["{}: файлы {} вместо {}".format(folder, present, sorted(expected))]
+    return ["{}: содержимое {} изменилось".format(folder, name) for name, data in expected.items()
+            if open(os.path.join(folder, name), "rb").read() != data]
+
+
+def _check_service_dirs(root):
+    problems = []
+    for relative in SERVICE_DIRS:
+        folder = os.path.join(root, relative)
+        if sorted(os.listdir(folder)) != sorted(SERVICE_FILES):
+            problems.append("{}: служебная папка изменена: {}".format(folder, sorted(os.listdir(folder))))
     return problems
 
 

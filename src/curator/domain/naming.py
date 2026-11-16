@@ -17,6 +17,14 @@ from abc import ABC, abstractmethod
 
 JPEG_EXTENSIONS = (".jpg", ".jpeg")
 
+# Служебные папки, в которые программа не заходит вовсе — ни читать, ни менять (D27):
+# документация и старые снимки. Имя сравнивается целиком, без учёта регистра и «ё».
+SKIPPED_DIRS = ("ds", "datasheet", "стар", "старо", "star", "staro")
+
+
+def is_skipped_dir(name):
+    return normalize(name).strip() in SKIPPED_DIRS
+
 
 class NamingScheme(ABC):
     @abstractmethod

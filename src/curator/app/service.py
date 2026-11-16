@@ -16,6 +16,7 @@ from curator.app import events as ev
 from curator.app.scan import scan_root
 from curator.domain import states
 from curator.domain.errors import PreconditionError, CuratorError
+from curator.domain.models import CONFLICT
 from curator.fs.locks import FolderLock, FolderLocked, normalize
 from curator.transaction import recovery as recovery_module
 from curator.transaction.executor import ExecutionOptions, FolderExecutor
@@ -53,8 +54,9 @@ class SessionSummary:
     cancelled: bool = False
     seconds: float = 0.0
     accepted: bool = False
-    renamed_folders: int = 0  # готовые папки, где .jpg -> .jpeg (D26)
+    renamed_folders: int = 0  # готовые и конфликтные папки, где .jpg -> .jpeg (D26)
     renamed_files: int = 0
+    skipped_manual: int = 0   # отмечены «пропустить» в окне
 
     @property
     def succeeded(self):
@@ -205,8 +207,10 @@ class ProcessingService:
 
     # -------------------------------------------------------------- обработка
 
-    def start(self, root_or_scan):
+    def start(self, root_or_scan, skip=()):
+        """skip — папки, отмеченные «пропустить»: не обрабатываются и не переименовываются (не запоминается)."""
         result = root_or_scan if hasattr(root_or_scan, "plans") else self.scan(root_or_scan)
+        skip = {normalize(folder) for folder in skip}
         self.check_environment()
         self._legacy = self.legacy_unfinished()
         self._cancel.clear()
@@ -217,12 +221,19 @@ class ProcessingService:
         self.session = summary
 
         journal = self._open_journal(result.root)
-        self._emit(ev.SESSION_STARTED, root=result.root, folders=len(result.to_process),
-                   files=result.total_files, journal=journal.path, log=self.log_path)
-        self.logger.info("Старт обработки: %s (%s папок, %s файлов)",
-                         result.root, len(result.to_process), result.total_files)
+        to_process = [plan for plan in result.to_process if normalize(plan.folder) not in skip]
+        to_rename = [plan for plan in result.to_rename if normalize(plan.folder) not in skip]
+        files = sum(len(plan.files) for plan in to_process)
+        self._emit(ev.SESSION_STARTED, root=result.root, folders=len(to_process),
+                   files=files, journal=journal.path, log=self.log_path)
+        self.logger.info("Старт обработки: %s (%s папок, %s файлов)", result.root, len(to_process), files)
+        for plan in result.to_process + result.to_rename:
+            if normalize(plan.folder) in skip:
+                summary.skipped_manual += 1
+                self.logger.info("Папка %s пропущена: отмечена «пропустить»", plan.folder)
+                self._emit(ev.FOLDER_SKIPPED, folder=plan.folder, reason="пропущена вручную", manual=True)
 
-        for plan in result.to_process:
+        for plan in to_process:
             if self._cancel.is_set():
                 summary.cancelled = True
                 break
@@ -232,7 +243,7 @@ class ProcessingService:
             else:
                 summary.skipped_locked += 1
 
-        for plan in result.to_rename:
+        for plan in to_rename:
             if self._cancel.is_set():
                 summary.cancelled = True
                 break
@@ -316,7 +327,7 @@ class ProcessingService:
         return outcome
 
     def _rename_folder(self, plan, journal, summary):
-        """Готовая папка: «рентгенограмма….jpg» -> «….jpeg» (D26). Блокировка и журнал — как у обработки."""
+        """Готовая или конфликтная папка: «рентгенограмма….jpg» -> «….jpeg» (D26). Блокировка и журнал — как у обработки."""
         reason = self._legacy_reason(plan.folder)
         if reason:
             self._problem("Папка %s пропущена: %s", plan.folder, reason, folder=plan.folder)
@@ -351,8 +362,9 @@ class ProcessingService:
                 summary.outcomes[-1].warnings = list(rolled.warnings)
             else:
                 self._problem("Папка %s: %s", plan.folder, result.error, folder=plan.folder)
+        conflict = plan.decision.reason if plan.decision.kind == CONFLICT else None
         self._emit(ev.FOLDER_RENAMED, folder=plan.folder, state=result.state, files=result.renamed,
-                   error=result.error, rolled_back=rolled_back)
+                   error=result.error, rolled_back=rolled_back, conflict=conflict)
 
     # ------------------------------------------------------------------ откат
 
